@@ -1,0 +1,38 @@
+{
+  "configurations" : [
+    {
+      "id" : "0BECC6F1-DB4D-4B78-813A-03501D0D0234",
+      "name" : "Test Scheme Action",
+      "options" : {
+
+      }
+    }
+  ],
+  "defaultOptions" : {
+    "performanceAntipatternCheckerEnabled" : true,
+    "targetForVariableExpansion" : {
+      "containerPath" : "container:RecipePlannerIOS.xcodeproj",
+      "identifier" : "8D0DADF72EC841C300F290E2",
+      "name" : "RecipePlannerIOS"
+    }
+  },
+  "testTargets" : [
+    {
+      "parallelizable" : true,
+      "target" : {
+        "containerPath" : "container:RecipePlannerIOS.xcodeproj",
+        "identifier" : "8D0DAE092EC841C600F290E2",
+        "name" : "RecipePlannerIOSTests"
+      }
+    },
+    {
+      "parallelizable" : true,
+      "target" : {
+        "containerPath" : "container:RecipePlannerIOS.xcodeproj",
+        "identifier" : "8D0DAE132EC841C600F290E2",
+        "name" : "RecipePlannerIOSUITests"
+      }
+    }
+  ],
+  "version" : 1
+}
