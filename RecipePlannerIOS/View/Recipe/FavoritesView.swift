@@ -10,12 +10,10 @@ import SwiftUI
 struct FavoritesView: View {
     @Environment(RecipeManager.self) private var recipeManager
     
-    // --- WICKED STYLE: Paleta kolorów ---
     private let wickedGreen = Color(red: 0.0, green: 0.6, blue: 0.2)
     private let glindaPink = Color(red: 1.0, green: 0.75, blue: 0.8)
     private let darkBackground = Color(red: 0.1, green: 0.1, blue: 0.1)
 
-    // Pobieranie ulubionych przepisów (bez zmian)
     var favoriteRecipes: [Recipe] {
         recipeManager.userRecipes.filter { $0.isFavorite }
     }
@@ -25,9 +23,7 @@ struct FavoritesView: View {
             GeometryReader { proxy in
                 let safeAreaInsets = proxy.safeAreaInsets
                 
-                // --- WICKED GLASS: ZStack dla tła i niestandardowego paska ---
                 ZStack {
-                    // 1. Tło z gradientem
                     darkBackground.ignoresSafeArea()
                     RadialGradient(
                         colors: [wickedGreen.opacity(0.3), .clear],
@@ -42,11 +38,9 @@ struct FavoritesView: View {
                         endRadius: 500
                     ).ignoresSafeArea()
 
-                    // 2. Główna przewijana zawartość
                     ScrollView {
-                        VStack {
+                        VStack(spacing: 20) {
                             if favoriteRecipes.isEmpty {
-                                // --- WICKED GLASS: Styl dla ContentUnavailableView ---
                                 ContentUnavailableView(
                                     label: {
                                         Label {
@@ -54,59 +48,112 @@ struct FavoritesView: View {
                                                 .font(.title3.bold())
                                         } icon: {
                                             Image(systemName: "heart.slash.fill")
-                                                .foregroundStyle(glindaPink) // Różowa ikona
+                                                .foregroundStyle(glindaPink)
                                         }
                                     },
                                     description: {
                                         Text("Mark the recipe with a heart on the recipe card to display it here.")
                                     }
                                 )
-                                .foregroundStyle(.secondary) // Jasnoszary tekst na ciemnym tle
+                                .foregroundStyle(.secondary)
                                 .padding(.top, 100)
                                 
                             } else {
-                                LazyVGrid(
-                                    columns: [GridItem(.flexible()), GridItem(.flexible())],
-                                    spacing: 20
-                                ) {
+                                LazyVStack(spacing: 20) {
                                     ForEach(favoriteRecipes) { recipe in
-                                        // Używa RecipeGridItem, który już jest ostylowany
-                                        RecipeGridItem(recipe: recipe)
+                                        NavigationLink {
+                                            RecipeDetailView(recipe: recipe)
+                                        } label: {
+                                            FavoriteRecipeRow(recipe: recipe, glindaPink: glindaPink)
+                                        }
+                                        .buttonStyle(.plain)
                                     }
                                 }
                                 .padding(.horizontal)
                             }
                         }
-                        // Padding, aby treść zaczynała się POD szklanym paskiem
-                        .padding(.top, safeAreaInsets.top + 80) // 80 = wysokość paska
+                        .padding(.top, safeAreaInsets.top + 80)
                         .padding(.bottom, 20)
                     }
-                    .edgesIgnoringSafeArea(.top) // Pozwala scrollować "pod" paskiem
+                    .edgesIgnoringSafeArea(.top)
 
-                    // 3. --- WICKED GLASS: Niestandardowy "szklany" nagłówek ---
                     VStack(spacing: 0) {
                         HStack {
-                            // Tytuł w stylu Wicked
                             Text("Favorites")
                                 .font(.system(.largeTitle, design: .serif))
                                 .fontWeight(.bold)
-                                .foregroundStyle(wickedGreen) // Zielony tytuł
+                                .foregroundStyle(wickedGreen)
                             Spacer()
                         }
                         .padding(.horizontal)
                         .padding(.bottom, 12)
-                        .padding(.top, safeAreaInsets.top + 10) // Dopasowanie do Safe Area
+                        .padding(.top, safeAreaInsets.top + 10)
                     }
-                    .background(.ultraThinMaterial) // EFEKT SZKŁA
-                    // Subtelna linia na dole
+                    .background(.ultraThinMaterial)
                     .overlay(Rectangle().frame(height: 1).foregroundStyle(Color.white.opacity(0.2)), alignment: .bottom)
-                    .frame(maxHeight: .infinity, alignment: .top) // Przypnij do góry
-                    .edgesIgnoringSafeArea(.top) // Rozciągnij na obszar Safe Area
+                    .frame(maxHeight: .infinity, alignment: .top)
+                    .edgesIgnoringSafeArea(.top)
                     
                 }
-                .navigationBarHidden(true) // Ukrywamy domyślny pasek
-                .preferredColorScheme(.dark) // Wymuszamy ciemny tryb
+                .navigationBarHidden(true)
+                .preferredColorScheme(.dark)
             }
         }
+    }
+}
+
+// MARK: WIDOK POMOCNICZY
+
+struct FavoriteRecipeRow: View {
+    let recipe: Recipe
+    let glindaPink: Color
+
+    var body: some View {
+        ZStack(alignment: .bottomLeading) {
+            AsyncImageView(urlString: recipe.imageURL ?? "")
+                .scaledToFill()
+                .frame(height: 250)
+                .clipped()
+            
+            VStack {
+                Spacer()
+                LinearGradient(
+                    colors: [.black.opacity(0.9), .black.opacity(0.7), .clear],
+                    startPoint: .bottom,
+                    endPoint: .top
+                )
+                .frame(height: 150)
+            }
+
+            VStack(alignment: .leading, spacing: 8) {
+                Text(recipe.name)
+                    .font(.system(.title2, design: .serif))
+                    .fontWeight(.bold)
+                    .foregroundStyle(.white)
+                    .shadow(radius: 2)
+                
+                Text(recipe.category.uppercased())
+                    .font(.caption.bold())
+                    .foregroundStyle(glindaPink)
+                    .padding(.vertical, 4)
+                    .padding(.horizontal, 8)
+                    .background(glindaPink.opacity(0.2))
+                    .clipShape(Capsule())
+                
+                HStack(spacing: 15) {
+                    Label("\(recipe.preparationTimeMinutes) min", systemImage: "clock")
+                    Label("\(recipe.servings) servings", systemImage: "person.2")
+                }
+                .font(.footnote)
+                .foregroundStyle(.white.opacity(0.8))
+            }
+            .padding()
+        }
+        .frame(height: 250)
+        .clipShape(RoundedRectangle(cornerRadius: 20))
+        .overlay(
+            RoundedRectangle(cornerRadius: 20)
+                .stroke(Color.white.opacity(0.2), lineWidth: 1)
+        )
     }
 }

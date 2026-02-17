@@ -24,12 +24,10 @@ private struct RecipeManagerKey: EnvironmentKey {
 }
 
 private struct WaterManagerKey: EnvironmentKey {
-    // Optional in environment because it’s userId-scoped and created post-login
     static let defaultValue: WaterManager? = nil
 }
 
 private struct MealPlannerManagerKey: EnvironmentKey {
-    // Optional in environment because it’s userId-scoped and created post-login
     static let defaultValue: MealPlannerManager? = nil
 }
 

@@ -1,8 +1,8 @@
 //
-//  EditRecipeView.swift
-//  RecipePlannerIOS
+//  EditRecipeView.swift
+//  RecipePlannerIOS
 //
-//  Created by Dominika Sieńko on 18/11/2025.
+//  Created by Dominika Sieńko on 19/12/2025.
 //
 
 import SwiftUI
@@ -10,38 +10,43 @@ import UIKit
 import FirebaseAuth
 import PhotosUI
 
+private let customListRowBackground = Color(uiColor: .black.withAlphaComponent(0.2))
+
 struct EditRecipeView: View {
-    // 1. Environment Objects
     @Environment(RecipeManager.self) private var recipeManager
     @Environment(StorageManager.self) private var storageManager
     @Environment(\.dismiss) var dismiss
     
-    // 2. Original Recipe (read-only)
     let originalRecipe: Recipe
     
-    // 3. Local State, initialized with existing recipe
+    // MARK: - State
     @State private var recipeToEdit: Recipe
-    @State private var selectedImage: UIImage?
-    @State private var originalImageURL: String?
+    @State private var useSections: Bool = false
     
-    // Image Tracking States
+    // Image Handling
+    @State private var selectedImage: UIImage?
     @State private var imageWasChanged: Bool = false
     @State private var imageWasRemoved: Bool = false
     @State private var isShowingImagePicker = false
     
-    // Alert States
+    // Alerts
     @State private var showingSaveError = false
     @State private var showingDeleteConfirmation = false
 
-    // Available categories (as in AddRecipeView)
     let availableCategories: [String] = [
-        "ALL", "BASICS", "BREAKFAST & BRUNCH", "APPETIZERS, SIDES & SALADS",
-        "SOUP, STEW & CURRY", "LUNCH & DINNER", "PASTA & GNOCCHI",
-        "QUICK & EASY", "PIZZA, SANDWICHES & BURGER", "CAKE",
-        "FINGERFOOD & SNACKS", "SWEETS & DESSERT"
-    ]
+        String(localized: "BASICS"),
+        String(localized: "BREAKFAST & BRUNCH"),
+        String(localized: "APPETIZERS, SIDES & SALADS"),
+        String(localized: "SOUP, STEW & CURRY"),
+        String(localized: "LUNCH & DINNER"),
+        String(localized: "PASTA & GNOCCHI"),
+        String(localized: "QUICK & EASY"),
+        String(localized: "PIZZA, SANDWICHES & BURGER"),
+        String(localized: "CAKE"),
+        String(localized: "FINGERFOOD & SNACKS"),
+        String(localized: "SWEETS & DESSERT")
+    ].sorted()
     
-    // Formatters
     private var timeFormatter: NumberFormatter = {
         let formatter = NumberFormatter()
         formatter.numberStyle = .decimal
@@ -50,37 +55,58 @@ struct EditRecipeView: View {
         return formatter
     }()
     
-    private var quantityFormatter: NumberFormatter = {
-        let formatter = NumberFormatter()
-        formatter.numberStyle = .decimal
-        formatter.maximumFractionDigits = 2
-        return formatter
-    }()
-    
-    // Form Validation
-    private var isFormValid: Bool {
-        return !recipeToEdit.name.isEmpty && recipeToEdit.preparationTimeMinutes > 0
-    }
-    
     // MARK: - Initialization
-    
     init(recipe: Recipe) {
         self.originalRecipe = recipe
-        _recipeToEdit = State(initialValue: recipe)
-        _originalImageURL = State(initialValue: recipe.imageURL)
-        // Set up appearance for UIKit elements if needed (e.g., Segmented Control)
-        // Since we are using Form, we rely mostly on SwiftUI styles.
+        
+        var initialRecipe = recipe
+        
+        if initialRecipe.sections == nil || initialRecipe.sections!.isEmpty {
+            let initialSection = RecipeSection(
+                title: "",
+                ingredients: initialRecipe.ingredients,
+                instructions: initialRecipe.instructions
+            )
+            initialRecipe.sections = [initialSection]
+        }
+        
+        let isSectional = initialRecipe.sections!.count > 1 ||
+                         (initialRecipe.sections!.count == 1 && !initialRecipe.sections![0].title.isEmpty)
+        
+        _recipeToEdit = State(initialValue: initialRecipe)
+        _useSections = State(initialValue: isSectional)
+    }
+    
+    // MARK: - Validation
+    private var isFormValid: Bool {
+        guard !recipeToEdit.name.trimmingCharacters(in: .whitespaces).isEmpty,
+              recipeToEdit.preparationTimeMinutes > 0 else { return false }
+        
+        let sectionsToCheck = recipeToEdit.sections ?? []
+        
+        let hasIngredients = sectionsToCheck.contains { section in
+            section.ingredients.contains { !$0.name.isEmpty }
+        }
+        
+        let hasInstructions = sectionsToCheck.contains { section in
+            section.instructions.contains { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
+        }
+            
+        return hasIngredients && hasInstructions
+    }
+    
+    private var sectionsBinding: Binding<[RecipeSection]> {
+        Binding(
+            get: { recipeToEdit.sections ?? [] },
+            set: { recipeToEdit.sections = $0 }
+        )
     }
     
     // MARK: - View Body
-    
     var body: some View {
         ZStack {
-            // 1. Background (Dark Background Color)
             Color.darkBackground.ignoresSafeArea()
             
-            // --- WICKED V2: Colorful Background Blobs ---
-            // Using predefined Color extension (must be added outside this struct)
             Ellipse()
                 .fill(Color.wickedGreen.opacity(0.4))
                 .frame(width: 300, height: 300)
@@ -95,23 +121,52 @@ struct EditRecipeView: View {
                 .blur(radius: 80)
                 .ignoresSafeArea()
 
-            // 2. Form Content (Glass Effect)
-            // Using a List/Form with a custom background for the glass look
-            
             List {
+                // MARK: Image Section
+                Section {
+                    VStack {
+                        EditableRecipeImagePicker(
+                            selectedImage: $selectedImage,
+                            originalImageURL: imageWasRemoved ? nil : recipeToEdit.imageURL
+                        )
+                        .onTapGesture {
+                            isShowingImagePicker = true
+                        }
+                        .contextMenu {
+                            Button {
+                                isShowingImagePicker = true
+                            } label: {
+                                Label("Change Photo", systemImage: "photo")
+                            }
+                            
+                            if selectedImage != nil || (recipeToEdit.imageURL != nil && !imageWasRemoved) {
+                                Button(role: .destructive) {
+                                    withAnimation {
+                                        selectedImage = nil
+                                        imageWasRemoved = true
+                                        imageWasChanged = true
+                                    }
+                                } label: {
+                                    Label("Remove Photo", systemImage: "trash")
+                                }
+                            }
+                        }
+                    }
+                    .listRowBackground(Color.clear)
+                    .listRowInsets(EdgeInsets())
+                }
+
+                // MARK: Basic Info
                 Section("Basic Information") {
                     TextField("Recipe Name", text: $recipeToEdit.name)
                         .autocorrectionDisabled()
-                        .listRowBackground(Color.black.opacity(0.2)) // Frosted Glass effect
                         .foregroundStyle(.white)
                     
                     Picker("Category", selection: $recipeToEdit.category) {
                         ForEach(availableCategories, id: \.self) { category in
                             Text(category).tag(category)
-                                .foregroundStyle(.white)
                         }
                     }
-                    .listRowBackground(Color.black.opacity(0.2))
                     .foregroundStyle(.white)
                     
                     HStack {
@@ -122,125 +177,71 @@ struct EditRecipeView: View {
                             .frame(width: 60)
                             .multilineTextAlignment(.trailing)
                     }
-                    .listRowBackground(Color.black.opacity(0.2))
+                    .foregroundStyle(.white)
+                    
+                    HStack {
+                        Text("Number of Servings")
+                        Spacer()
+                        Stepper("\(recipeToEdit.servings)", value: $recipeToEdit.servings, in: 1...32)
+                    }
                     .foregroundStyle(.white)
                     
                     Toggle("Favorite", isOn: $recipeToEdit.isFavorite)
-                        .listRowBackground(Color.black.opacity(0.2))
                         .tint(Color.wickedGreen)
                         .foregroundStyle(.white)
                 }
-                .headerProminence(.increased)
-                .listRowSeparatorTint(Color.white.opacity(0.3)) // Subtle separator
-
-                // --- INGREDIENTS SECTION ---
-                Section("Ingredients") {
-                    ForEach($recipeToEdit.ingredients) { $ingredient in
-                        HStack {
-                            TextField("Name", text: $ingredient.name)
-                                .autocorrectionDisabled()
-                            Spacer()
-                            TextField("Amount", value: $ingredient.quantity, formatter: quantityFormatter)
-                                .keyboardType(.decimalPad)
-                                .frame(width: 80)
-                                .multilineTextAlignment(.trailing)
-                            TextField("Unit", text: $ingredient.unit)
-                                .frame(width: 60)
-                                .multilineTextAlignment(.trailing)
-                        }
-                        .listRowBackground(Color.black.opacity(0.2))
-                        .foregroundStyle(.white)
-                    }
-                    .onDelete(perform: deleteIngredient)
-                    
-                    Button("Add Ingredient") {
-                        recipeToEdit.ingredients.append(Ingredient(name: "", quantity: 0.0, unit: "g"))
-                    }
-                    .listRowBackground(Color.black.opacity(0.2))
-                    .foregroundStyle(Color.wickedGreen)
-                }
+                .listRowBackground(customListRowBackground)
                 .headerProminence(.increased)
                 .listRowSeparatorTint(Color.white.opacity(0.3))
 
-                // --- INSTRUCTIONS SECTION ---
-                Section("Instructions (Steps)") {
-                    ForEach(recipeToEdit.instructions.indices, id: \.self) { index in
-                        VStack(alignment: .leading) {
-                            Text("Step \(index + 1):")
-                                .font(.caption).bold()
-                                .foregroundStyle(Color.glindaPink)
-                            TextEditor(text: $recipeToEdit.instructions[index])
-                                .frame(minHeight: 80)
-                                .border(Color.gray.opacity(0.3))
-                                .scrollContentBackground(.hidden) // Required to show custom background
-                                .background(Color.black.opacity(0.1))
-                                .cornerRadius(8)
+                // MARK: Ingredients & Instructions
+                IngredientsSection(sections: sectionsBinding, useSections: $useSections)
+                    .listRowSeparatorTint(Color.white.opacity(0.3))
+                    .listRowBackground(customListRowBackground)
+                
+                InstructionsSection(sections: sectionsBinding, useSections: $useSections)
+                    .listRowSeparatorTint(Color.white.opacity(0.3))
+                    .listRowBackground(customListRowBackground)
+                
+                // MARK: Notes
+                Section("Notes / Tips (Optional)") {
+                    ZStack(alignment: .topLeading) {
+                        if recipeToEdit.notes.isEmptyOrNil {
+                            Text("Add notes, tips, or storage instructions...")
+                                .foregroundStyle(.gray.opacity(0.5))
+                                .padding(.top, 8)
+                                .padding(.leading, 5)
                         }
-                        .listRowBackground(Color.black.opacity(0.2))
-                        .foregroundStyle(.white)
-                    }
-                    .onDelete(perform: deleteInstruction)
-                    
-                    Button("Add Step") {
-                        recipeToEdit.instructions.append("")
-                    }
-                    .listRowBackground(Color.black.opacity(0.2))
-                    .foregroundStyle(Color.wickedGreen)
-                }
-                .headerProminence(.increased)
-                .listRowSeparatorTint(Color.white.opacity(0.3))
-
-                // --- IMAGE SECTION ---
-                Section("Recipe Image") {
-                    VStack {
-                        // Display Current Image
-                        ImageDisplayView(selectedImage: $selectedImage, imageURL: recipeToEdit.imageURL)
                         
-                        HStack {
-                            Button("Select Image") {
-                                isShowingImagePicker = true
-                            }
-                            .buttonStyle(.borderedProminent)
-                            .tint(Color.wickedGreen)
-                            
-                            if selectedImage != nil || recipeToEdit.imageURL != nil {
-                                Button("Remove Image") {
-                                    selectedImage = nil
-                                    recipeToEdit.imageURL = nil
-                                    imageWasRemoved = true
-                                    imageWasChanged = true
-                                }
-                                .buttonStyle(.bordered)
-                                .tint(.red)
-                            }
-                        }
+                        TextEditor(text: $recipeToEdit.notes.bound)
+                            .frame(minHeight: 100)
+                            .scrollContentBackground(.hidden)
+                            .background(Color.black.opacity(0.1))
+                            .cornerRadius(8)
+                            .foregroundStyle(.white)
                     }
-                    .listRowBackground(Color.black.opacity(0.2))
-                    .frame(maxWidth: .infinity)
                 }
+                .listRowBackground(customListRowBackground)
+                .foregroundStyle(.white)
                 .headerProminence(.increased)
                 .listRowSeparatorTint(Color.white.opacity(0.3))
                 
-                // --- DELETE SECTION ---
+                // MARK: Delete Button
                 Section {
                     Button("Delete Recipe", role: .destructive) {
                         showingDeleteConfirmation = true
                     }
-                    .listRowBackground(Color.black.opacity(0.2))
+                    .listRowBackground(customListRowBackground)
                     .foregroundStyle(.red)
                 }
-                
-            } // End List
-            .scrollContentBackground(.hidden) // Important for transparent/custom background
-            .listStyle(.grouped) // Use grouped style for sections
+            }
+            .scrollContentBackground(.hidden)
+            .listStyle(.grouped)
             .preferredColorScheme(.dark)
-            .padding(.top, 1) // Small padding fix for list background drawing
-            
-        } // End ZStack
-        .onAppear {
-            originalImageURL = originalRecipe.imageURL
+            .environment(\.editMode, .constant(.active))
         }
         .navigationTitle("Edit Recipe")
+        .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {
                 Button("Save") {
@@ -249,7 +250,6 @@ struct EditRecipeView: View {
                     }
                 }
                 .disabled(!isFormValid)
-                // Use a custom color for the Save button
                 .foregroundStyle(isFormValid ? Color.wickedGreen : Color.gray)
             }
         }
@@ -266,41 +266,62 @@ struct EditRecipeView: View {
         } message: {
             Text("The operation could not be completed. Please try again later.")
         }
-        // Image Picker Sheet
         .sheet(isPresented: $isShowingImagePicker) {
             ImagePicker(selectedImage: $selectedImage, imageWasChanged: $imageWasChanged)
                 .onDisappear {
-                    if imageWasChanged {
+                    if imageWasChanged && selectedImage != nil {
                         imageWasRemoved = false
                     }
                 }
         }
     }
     
-    // MARK: - Helper Functions
-    
-    private func deleteIngredient(offsets: IndexSet) {
-        recipeToEdit.ingredients.remove(atOffsets: offsets)
-    }
-    
-    private func deleteInstruction(offsets: IndexSet) {
-        recipeToEdit.instructions.remove(atOffsets: offsets)
-    }
-    
     // MARK: - Actions
-    
-    private func handleUpdateRecipe() async {
-        guard isFormValid, let recipeId = originalRecipe.id else { return }
-        
-        // Clean up empty fields before saving
-        recipeToEdit.ingredients = recipeToEdit.ingredients.filter { !$0.name.isEmpty }
-        recipeToEdit.instructions = recipeToEdit.instructions.filter { !$0.isEmpty }
 
+    private func handleUpdateRecipe() async {
+        guard isFormValid else { return }
+            
+        var finalRecipe = recipeToEdit
+        var sectionsToProcess = finalRecipe.sections ?? []
+
+        // Clean data: Remove empty rows
+        sectionsToProcess = sectionsToProcess.map { section in
+            var cleaned = section
+            cleaned.ingredients = section.ingredients.filter { !$0.name.trimmingCharacters(in: .whitespaces).isEmpty }
+            cleaned.instructions = section.instructions.filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
+            return cleaned
+        }.filter { !$0.ingredients.isEmpty || !$0.instructions.isEmpty }
+
+        if useSections {
+            finalRecipe.sections = sectionsToProcess
+            finalRecipe.ingredients = sectionsToProcess.flatMap { $0.ingredients }
+            finalRecipe.instructions = sectionsToProcess.flatMap { $0.instructions }
+        } else {
+            let flatIngredients = sectionsToProcess.flatMap { $0.ingredients }
+            let flatInstructions = sectionsToProcess.flatMap { $0.instructions }
+            
+            finalRecipe.sections = [RecipeSection(title: "", ingredients: flatIngredients, instructions: flatInstructions)]
+            finalRecipe.ingredients = flatIngredients
+            finalRecipe.instructions = flatInstructions
+        }
+        
+        // Image Logic
+        let newImageToUpload: UIImage? = (imageWasChanged && !imageWasRemoved) ? selectedImage : nil
+        let existingImageURL = originalRecipe.imageURL
+        
+        if imageWasRemoved {
+            finalRecipe.imageURL = nil
+        } else if !imageWasChanged {
+            finalRecipe.imageURL = originalRecipe.imageURL
+        }
+            
         do {
-            try await recipeManager.updateRecipe(
-                recipeId: recipeId,
-                updatedRecipe: recipeToEdit,
-                newImage: selectedImage,
+            finalRecipe.id = originalRecipe.id
+            
+            _ = try await recipeManager.saveRecipe(
+                recipe: finalRecipe,
+                newImage: newImageToUpload,
+                existingImageURL: existingImageURL,
                 storageManager: storageManager
             )
             dismiss()
@@ -311,12 +332,9 @@ struct EditRecipeView: View {
     }
     
     private func handleDeleteRecipe() async {
-        guard let recipeId = originalRecipe.id else { return }
-        
         do {
             try await recipeManager.deleteRecipe(
-                recipeId: recipeId,
-                imageURL: originalRecipe.imageURL,
+                recipe: originalRecipe,
                 storageManager: storageManager
             )
             dismiss()
@@ -327,78 +345,149 @@ struct EditRecipeView: View {
     }
 }
 
-// MARK: - Supporting Views
+// MARK: - Reusable Image UI Component
 
-// Helper View for Image Display Logic
-struct ImageDisplayView: View {
+struct EditableRecipeImagePicker: View {
     @Binding var selectedImage: UIImage?
-    var imageURL: String?
-    
+    var originalImageURL: String?
+
+    private let imageHeight: CGFloat = 220
+    private let cornerRadius: CGFloat = 12
+
     var body: some View {
-        if let image = selectedImage {
-            Image(uiImage: image)
-                .resizable()
-                .scaledToFit()
-                .frame(maxHeight: 250)
-                .clipShape(RoundedRectangle(cornerRadius: 10))
-                .padding(.vertical)
-        } else if let urlString = imageURL, let url = URL(string: urlString) {
-            AsyncImage(url: url) { phase in
-                switch phase {
-                case .empty:
-                    ProgressView()
-                case .success(let image):
-                    image.resizable()
-                case .failure:
-                    Text("Image not found")
-                @unknown default:
-                    EmptyView()
+        ZStack {
+            if let image = selectedImage {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFill()
+                    .frame(maxWidth: .infinity, minHeight: imageHeight, maxHeight: imageHeight)
+                    .clipped()
+                    .cornerRadius(cornerRadius)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: cornerRadius)
+                            .stroke(Color.secondary.opacity(0.15), lineWidth: 1)
+                    )
+            }
+            else if let urlString = originalImageURL, let url = URL(string: urlString) {
+                AsyncImage(url: url) { phase in
+                    switch phase {
+                    case .empty:
+                        ProgressView()
+                    case .success(let image):
+                        image
+                            .resizable()
+                            .scaledToFill()
+                            .frame(maxWidth: .infinity, minHeight: imageHeight, maxHeight: imageHeight)
+                            .clipped()
+                            .cornerRadius(cornerRadius)
+                    case .failure:
+                        placeholderView
+                    @unknown default:
+                        placeholderView
+                    }
                 }
             }
-            .scaledToFit()
-            .frame(maxHeight: 250)
-            .clipShape(RoundedRectangle(cornerRadius: 10))
-            .padding(.vertical)
+            else {
+                placeholderView
+            }
+            
+            VStack {
+                Spacer()
+                HStack {
+                    Spacer()
+                    Label("Tap to change", systemImage: "camera.fill")
+                        .font(.footnote)
+                        .padding(8)
+                        .background(.ultraThinMaterial, in: Capsule())
+                        .padding(10)
+                }
+            }
         }
+        .contentShape(Rectangle())
+        .animation(.default, value: selectedImage)
+    }
+
+    private var placeholderView: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: cornerRadius)
+                .fill(Color.secondary.opacity(0.08))
+                .frame(maxWidth: .infinity, minHeight: imageHeight, maxHeight: imageHeight)
+            VStack(spacing: 8) {
+                Image(systemName: "photo.on.rectangle.angled")
+                    .font(.system(size: 36))
+                    .foregroundStyle(.secondary)
+                Text("Tap to add a photo")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .overlay(
+            RoundedRectangle(cornerRadius: cornerRadius)
+                .stroke(Color.secondary.opacity(0.15), lineWidth: 1)
+        )
     }
 }
 
+// MARK: - Photo Picker Implementation
 
-// ImagePicker remains the same (provided in the original code)
 struct ImagePicker: UIViewControllerRepresentable {
     @Binding var selectedImage: UIImage?
     @Binding var imageWasChanged: Bool
 
-    func makeUIViewController(context: Context) -> UIImagePickerController {
-        let picker = UIImagePickerController()
+    func makeUIViewController(context: Context) -> PHPickerViewController {
+        var configuration = PHPickerConfiguration()
+        configuration.filter = .images
+        configuration.selectionLimit = 1
+        let picker = PHPickerViewController(configuration: configuration)
         picker.delegate = context.coordinator
-        picker.sourceType = .photoLibrary
         return picker
     }
 
-    func updateUIViewController(_ uiViewController: UIImagePickerController, context: Context) {}
+    func updateUIViewController(_ uiViewController: PHPickerViewController, context: Context) {}
 
     func makeCoordinator() -> Coordinator {
         Coordinator(self)
     }
 
-    class Coordinator: NSObject, UIImagePickerControllerDelegate, UINavigationControllerDelegate {
+    class Coordinator: NSObject, PHPickerViewControllerDelegate {
         var parent: ImagePicker
 
         init(_ parent: ImagePicker) {
             self.parent = parent
         }
 
-        func imagePickerController(_ picker: UIImagePickerController, didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey : Any]) {
-            if let image = info[.originalImage] as? UIImage {
-                parent.selectedImage = image
-                parent.imageWasChanged = true
-            }
+        func picker(_ picker: PHPickerViewController, didFinishPicking results: [PHPickerResult]) {
             picker.dismiss(animated: true)
-        }
 
-        func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
-            picker.dismiss(animated: true)
+            guard let itemProvider = results.first?.itemProvider, itemProvider.canLoadObject(ofClass: UIImage.self) else {
+                return
+            }
+
+            itemProvider.loadObject(ofClass: UIImage.self) { [weak self] image, error in
+                DispatchQueue.main.async {
+                    if let uiImage = image as? UIImage {
+                        self?.parent.selectedImage = uiImage
+                        self?.parent.imageWasChanged = true
+                    }
+                }
+            }
         }
+    }
+}
+
+// MARK: - Helpers
+
+extension Binding where Value == String? {
+    var bound: Binding<String> {
+        return Binding<String>(
+            get: { self.wrappedValue ?? "" },
+            set: { self.wrappedValue = $0.isEmpty ? nil : $0 }
+        )
+    }
+}
+
+extension Optional where Wrapped == String {
+    var isEmptyOrNil: Bool {
+        return self?.isEmpty ?? true
     }
 }

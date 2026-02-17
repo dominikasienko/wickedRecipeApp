@@ -6,13 +6,37 @@
 //
 
 import SwiftUI
+import FirebaseAuth
 
 struct MainAppView: View {
+    @Environment(AuthManager.self) private var authManager
+    
     var body: some View {
-        Text(/*@START_MENU_TOKEN@*/"Hello, World!"/*@END_MENU_TOKEN@*/)
+        VStack(spacing: 20) {
+            Text("Hello, \(authManager.user?.email ?? "user")!")
+                .font(.title)
+            
+            Button("Log out") {
+                do {
+                    try authManager.signOut()
+                } catch {
+                    print("Logout error: \(error.localizedDescription)")
+                }
+            }
+            .buttonStyle(.bordered)
+            .tint(.orange)
+            
+            Button("Delete account") {
+                Task {
+                    do {
+                        try await authManager.deleteAccount()
+                    } catch {
+                        print("Account deletion error: \(error.localizedDescription)")
+                    }
+                }
+            }
+            .buttonStyle(.bordered)
+            .tint(.red)
+        }
     }
-}
-
-#Preview {
-    MainAppView()
 }

@@ -2,40 +2,64 @@
 //  RecipePlannerIOSUITests.swift
 //  RecipePlannerIOSUITests
 //
-//  Created by Dominika Sieńko on 15/11/2025.
+//  Created by Dominika Sieńko on 26/12/2025.
 //
 
 import XCTest
 
 final class RecipePlannerIOSUITests: XCTestCase {
 
+    let app = XCUIApplication()
+
     override func setUpWithError() throws {
-        // Put setup code here. This method is called before the invocation of each test method in the class.
-
-        // In UI tests it is usually best to stop immediately when a failure occurs.
+        // Zatrzymuje testy w momencie wystąpienia pierwszego błędu
         continueAfterFailure = false
-
-        // In UI tests it’s important to set the initial state - such as interface orientation - required for your tests before they run. The setUp method is a good place to do this.
-    }
-
-    override func tearDownWithError() throws {
-        // Put teardown code here. This method is called after the invocation of each test method in the class.
-    }
-
-    @MainActor
-    func testExample() throws {
-        // UI tests must launch the application that they test.
-        let app = XCUIApplication()
+        // Uruchamia aplikację przed każdym testem
         app.launch()
-
-        // Use XCTAssert and related functions to verify your tests produce the correct results.
     }
 
+    /// Testuje, czy główne zakładki dolnego menu (TabBar) są widoczne i klikalne.
+    @MainActor
+    func testNavigationTabBarItemsExist() throws {
+        let tabBar = app.tabBars.firstMatch
+        
+        // Sprawdzenie czy ikony z AppTabView.swift są widoczne
+        XCTAssertTrue(tabBar.buttons["Home"].exists, "The Home tab should be visible.")
+        XCTAssertTrue(tabBar.buttons["Calendar"].exists, "The Calendar tab should be visible.")
+        XCTAssertTrue(tabBar.buttons["Water tracker"].exists, "The Water tracker tab should be visible.")
+        XCTAssertTrue(tabBar.buttons["Profile"].exists, "The Profile tab should be visible.")
+    }
+
+    /// Symuluje przejście do ekranu dodawania wody i sprawdza interakcję.
+    @MainActor
+    func testWaterTrackerNavigation() throws {
+        let waterTab = app.tabBars.buttons["Water tracker"]
+        XCTAssertTrue(waterTab.exists)
+        waterTab.tap()
+        
+        let waterHeader = app.staticTexts["Daily Intake"]
+        XCTAssertTrue(waterHeader.waitForExistence(timeout: 2), "The water screen should load.")
+    }
+
+    /// Testuje proces nawigacji do ustawień profilu.
+    @MainActor
+    func testProfileSettingsNavigation() throws {
+        app.tabBars.buttons["Profile"].tap()
+        
+        let settingsButton = app.buttons["gear"] 
+        if settingsButton.exists {
+            settingsButton.tap()
+            XCTAssertTrue(app.staticTexts["Settings"].exists, "The settings screen should appear.")
+        }
+    }
+
+    /// Testuje wydajność uruchamiania aplikacji.
     @MainActor
     func testLaunchPerformance() throws {
-        // This measures how long it takes to launch your application.
-        measure(metrics: [XCTApplicationLaunchMetric()]) {
-            XCUIApplication().launch()
+        if #available(macOS 10.15, iOS 13.0, tvOS 13.0, watchOS 7.0, *) {
+            measure(metrics: [XCTApplicationLaunchMetric()]) {
+                XCUIApplication().launch()
+            }
         }
     }
 }

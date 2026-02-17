@@ -2,13 +2,14 @@
 //  RecipePlannerIOSUITestsLaunchTests.swift
 //  RecipePlannerIOSUITests
 //
-//  Created by Dominika Sieńko on 15/11/2025.
+//  Created by Dominika Sieńko on 26/12/2025.
 //
 
 import XCTest
 
 final class RecipePlannerIOSUITestsLaunchTests: XCTestCase {
 
+    // Dzięki temu test uruchomi się dla różnych konfiguracji (np. Portrait/Landscape)
     override class var runsForEachTargetApplicationUIConfiguration: Bool {
         true
     }
@@ -18,16 +19,42 @@ final class RecipePlannerIOSUITestsLaunchTests: XCTestCase {
     }
 
     @MainActor
-    func testLaunch() throws {
+    func testLaunchAndCaptureKeyScreens() throws {
         let app = XCUIApplication()
         app.launch()
 
-        // Insert steps here to perform after app launch but before taking a screenshot,
-        // such as logging into a test account or navigating somewhere in the app
+        // 1. Zrzut ekranu: Ekran startowy (Home)
+        captureScreenshot(name: "01_HomeScreen", app: app)
 
-        let attachment = XCTAttachment(screenshot: app.screenshot())
-        attachment.name = "Launch Screen"
-        attachment.lifetime = .keepAlways
+        // 2. Przejście do kalendarza i zrzut
+        let calendarTab = app.tabBars.buttons["Calendar"]
+        if calendarTab.waitForExistence(timeout: 5) {
+            calendarTab.tap()
+            captureScreenshot(name: "02_CalendarScreen", app: app)
+        }
+
+        // 3. Przejście do monitora wody
+        let waterTab = app.tabBars.buttons["Water tracker"]
+        if waterTab.exists {
+            waterTab.tap()
+            captureScreenshot(name: "03_WaterTrackerScreen", app: app)
+        }
+
+        // 4. Przejście do profilu
+        let profileTab = app.tabBars.buttons["Profile"]
+        if profileTab.exists {
+            profileTab.tap()
+            captureScreenshot(name: "04_ProfileScreen", app: app)
+        }
+    }
+
+    /// Funkcja pomocnicza do robienia zrzutów ekranu
+    @MainActor
+    private func captureScreenshot(name: String, app: XCUIApplication) {
+        let screenshot = app.screenshot()
+        let attachment = XCTAttachment(screenshot: screenshot)
+        attachment.name = name
+        attachment.lifetime = .keepAlways // Zrzut zostanie zachowany w wynikach testu
         add(attachment)
     }
 }

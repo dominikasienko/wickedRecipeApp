@@ -36,11 +36,7 @@ struct RecipeDetailView: View {
             let safeAreaInsets = proxy.safeAreaInsets
             
             ZStack(alignment: .top) {
-                // 1. Tło
                 darkBackground.ignoresSafeArea()
-                
-                // --- WICKED V2: Kolorowe "Blobs" w tle ---
-                // Te elementy będą pięknie rozmywane przez arkusz
                 Ellipse()
                     .fill(wickedGreen.opacity(0.4))
                     .frame(width: 300, height: 300)
@@ -53,21 +49,16 @@ struct RecipeDetailView: View {
                     .position(x: proxy.size.width - 50, y: proxy.size.height - 100)
                     .blur(radius: 80)
                 
-                // 2. Główna przewijana treść
                 ScrollView(.vertical, showsIndicators: false) {
                     VStack(spacing: 0) {
-                        
-                        // --- 1. ZDJĘCIE PRZEPISU (HERO IMAGE) ---
                         GeometryReader { geo in
                             let minY = geo.frame(in: .global).minY
-                            // --- WICKED V2: Poprawka dla safeAreaInsets ---
                             let isScrollingDown = minY > safeAreaInsets.top
                             
                             AsyncImageView(urlString: recipe.imageURL ?? "")
                                 .scaledToFill()
                                 .frame(
                                     width: geo.size.width,
-                                    // --- WICKED V2: Większe zdjęcie i lepszy stretch ---
                                     height: 350 + (isScrollingDown ? (minY - safeAreaInsets.top) : 0)
                                 )
                                 .overlay(
@@ -80,19 +71,14 @@ struct RecipeDetailView: View {
                                 .clipped()
                                 .offset(y: isScrollingDown ? -(minY - safeAreaInsets.top) : 0)
                         }
-                        // --- WICKED V2: Zwiększona wysokość zdjęcia ---
                         .frame(height: 350)
                         
-                        // --- 2. ZAWARTOŚĆ PRZEPISU (ARKUSZ) ---
                         VStack(alignment: .leading, spacing: 20) {
-                            
-                            // Tytuł
                             Text(recipe.name)
                                 .font(.system(.largeTitle, design: .serif))
                                 .fontWeight(.bold)
                                 .foregroundStyle(wickedGreen)
                             
-                            // Podstawowe informacje
                             HStack(spacing: 12) {
                                 WickedInfoCapsule(
                                     icon: "clock.fill",
@@ -111,7 +97,6 @@ struct RecipeDetailView: View {
                             
                             Divider().overlay(glindaPink.opacity(0.5))
 
-                            // --- Przełącznik Składniki / Instrukcje ---
                             Picker("Details", selection: $selectedTab) {
                                 Text("Ingredients").tag(0)
                                 Text("Instructions").tag(1)
@@ -119,9 +104,15 @@ struct RecipeDetailView: View {
                             .pickerStyle(.segmented)
                             
                             if selectedTab == 0 {
-                                IngredientsLayout(ingredients: recipe.ingredients)
+                                IngredientsLayout(
+                                    sections: recipe.sections ?? [],
+                                    ingredients: recipe.ingredients
+                                )
                             } else {
-                                InstructionsLayout(instructions: recipe.instructions)
+                                InstructionsLayout(
+                                    sections: recipe.sections ?? [],
+                                    instructions: recipe.instructions
+                                )
                             }
                             
                             if let notes = recipe.notes, !notes.isEmpty {
@@ -129,15 +120,13 @@ struct RecipeDetailView: View {
                             }
                         }
                         .padding(25)
-                        .background(.ultraThinMaterial) // Główne "szkło"
+                        .background(.ultraThinMaterial)
                         .cornerRadius(25, corners: [.topLeft, .topRight])
-                        // --- WICKED V2: Większe nałożenie na zdjęcie ---
                         .padding(.top, -50)
                     }
                 }
                 .ignoresSafeArea(.container, edges: .top)
 
-                // --- 3. PŁYWAJĄCE PRZYCISKI NAWIGACYJNE ---
                 HStack {
                     WickedGlassButton(icon: "chevron.backward", action: {
                         dismiss()
@@ -147,7 +136,6 @@ struct RecipeDetailView: View {
                     
                     WickedGlassButton(
                         icon: recipe.isFavorite ? "heart.fill" : "heart",
-                        // --- WICKED V2: Serce w kolorze glindaPink ---
                         color: recipe.isFavorite ? glindaPink : .white,
                         action: {
                             toggleFavorite()
@@ -161,7 +149,7 @@ struct RecipeDetailView: View {
                         Image(systemName: "pencil")
                             .font(.system(size: 16, weight: .medium))
                             .frame(width: 40, height: 40)
-                            .background(.ultraThinMaterial) // Pływające szkło
+                            .background(.ultraThinMaterial)
                             .foregroundStyle(.white)
                             .clipShape(Circle())
                             .overlay(
@@ -186,7 +174,134 @@ struct RecipeDetailView: View {
     }
 }
 
-// MARK: - Widoki Pomocnicze (zaktualizowane do "Frosted-on-Glass")
+// MARK: - Widok Składników
+
+struct IngredientsLayout: View {
+    let sections: [RecipeSection]
+    let ingredients: [Ingredient]
+    
+    private let glindaPink = Color(red: 1.0, green: 0.75, blue: 0.8)
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 20) {
+            if !sections.isEmpty {
+                ForEach(sections) { section in
+                    if !section.ingredients.isEmpty {
+                        SectionHeader(title: section.title)
+                        IngredientList(ingredients: section.ingredients, glindaPink: glindaPink)
+                    }
+                }
+            } else {
+                IngredientList(ingredients: ingredients, glindaPink: glindaPink)
+            }
+        }
+    }
+}
+
+private struct IngredientList: View {
+    let ingredients: [Ingredient]
+    let glindaPink: Color
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            ForEach(ingredients, id: \.id) { ingredient in
+                HStack {
+                    Image(systemName: "circle.dotted")
+                        .font(.caption)
+                        .foregroundStyle(glindaPink)
+                    
+                    Text(ingredient.name)
+                        .foregroundStyle(.white)
+                    
+                    Spacer()
+                    
+                    let quantityText = ingredient.quantity.truncatingRemainder(dividingBy: 1) == 0 ?
+                                       String(format: "%.0f", ingredient.quantity) :
+                                       String(format: "%.1f", ingredient.quantity)
+
+                    Text("\(quantityText) \(ingredient.unit)")
+                        .foregroundStyle(.white.opacity(0.7))
+                        .bold()
+                }
+                .padding()
+                .background(Color.black.opacity(0.2))
+                .cornerRadius(12)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(Color.white.opacity(0.2), lineWidth: 1)
+                )
+            }
+        }
+    }
+}
+
+// MARK: - Widok Instrukcji
+
+struct InstructionsLayout: View {
+    let sections: [RecipeSection]
+    let instructions: [String]
+    
+    private let glindaPink = Color(red: 1.0, green: 0.75, blue: 0.8)
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 20) {
+            if !sections.isEmpty {
+                ForEach(sections) { section in
+                    if !section.instructions.isEmpty {
+                        SectionHeader(title: section.title)
+                        InstructionList(instructions: section.instructions, glindaPink: glindaPink)
+                    }
+                }
+            } else {
+                InstructionList(instructions: instructions, glindaPink: glindaPink)
+            }
+        }
+    }
+}
+
+private struct InstructionList: View {
+    let instructions: [String]
+    let glindaPink: Color
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 15) {
+            ForEach(instructions.indices, id: \.self) { index in
+                if !instructions[index].isEmpty {
+                    HStack(alignment: .top, spacing: 12) {
+                        Text("\(index + 1).")
+                            .bold()
+                            .foregroundStyle(glindaPink)
+                        
+                        Text(instructions[index])
+                            .foregroundStyle(.white)
+                            .lineSpacing(5)
+                    }
+                }
+            }
+        }
+    }
+}
+
+// MARK: - Widok Nagłówka Sekcji
+
+private struct SectionHeader: View {
+    let title: String
+    private let wickedGreen = Color(red: 0.0, green: 0.6, blue: 0.2)
+    private let glindaPink = Color(red: 1.0, green: 0.75, blue: 0.8)
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 5) {
+            Divider().overlay(glindaPink.opacity(0.5))
+            
+            Text(title)
+                .font(.title3).bold()
+                .foregroundStyle(wickedGreen)
+        }
+        .padding(.top, 10)
+    }
+}
+
+// MARK: - Widoki Pomocnicze
 
 struct WickedInfoCapsule: View {
     let icon: String
@@ -201,7 +316,6 @@ struct WickedInfoCapsule: View {
         .foregroundStyle(.white)
         .padding(.vertical, 8)
         .padding(.horizontal, 12)
-        // --- WICKED V2: Efekt "oszroniony" (Frosted) na szkle ---
         .background(Color.black.opacity(0.2))
         .clipShape(Capsule())
         .overlay(
@@ -220,70 +334,12 @@ struct WickedGlassButton: View {
             Image(systemName: icon)
                 .font(.system(size: 16, weight: .medium))
                 .frame(width: 40, height: 40)
-                // --- WICKED V2: Prawdziwe "szkło" (bez zmian, było dobrze) ---
                 .background(.ultraThinMaterial)
                 .foregroundStyle(color)
                 .clipShape(Circle())
                 .overlay(
                     Circle().stroke(Color.white.opacity(0.2), lineWidth: 1)
                 )
-        }
-    }
-}
-
-struct IngredientsLayout: View {
-    let ingredients: [Ingredient]
-    private let glindaPink = Color(red: 1.0, green: 0.75, blue: 0.8)
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            ForEach(ingredients, id: \.id) { ingredient in
-                HStack {
-                    Image(systemName: "circle.dotted")
-                        .font(.caption)
-                        .foregroundStyle(glindaPink)
-                    
-                    Text(ingredient.name)
-                        .foregroundStyle(.white)
-                    
-                    Spacer()
-                    
-                    Text("\(Int(ingredient.quantity)) \(ingredient.unit)")
-                        .foregroundStyle(.white.opacity(0.7))
-                        .bold()
-                }
-                .padding()
-                // --- WICKED V2: Efekt "oszroniony" (Frosted) na szkle ---
-                .background(Color.black.opacity(0.2))
-                .cornerRadius(12)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 12)
-                        .stroke(Color.white.opacity(0.2), lineWidth: 1)
-                )
-            }
-        }
-    }
-}
-
-struct InstructionsLayout: View {
-    let instructions: [String]
-    private let glindaPink = Color(red: 1.0, green: 0.75, blue: 0.8)
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 15) {
-            ForEach(instructions.indices, id: \.self) { index in
-                if !instructions[index].isEmpty {
-                    HStack(alignment: .top, spacing: 12) {
-                        Text("\(index + 1).")
-                            .bold()
-                            .foregroundStyle(glindaPink)
-                        
-                        Text(instructions[index])
-                            .foregroundStyle(.white)
-                            .lineSpacing(5)
-                    }
-                }
-            }
         }
     }
 }
@@ -306,7 +362,6 @@ struct NotesSection: View {
                 .lineSpacing(5)
                 .padding()
                 .frame(maxWidth: .infinity, alignment: .leading)
-                // --- WICKED V2: Efekt "oszroniony" (Frosted) na szkle ---
                 .background(Color.black.opacity(0.2))
                 .cornerRadius(12)
                 .overlay(
@@ -317,7 +372,6 @@ struct NotesSection: View {
     }
 }
 
-// Narożniki dla .cornerRadius (bez zmian)
 extension View {
     func cornerRadius(_ radius: CGFloat, corners: UIRectCorner) -> some View {
         clipShape( RoundedCorner(radius: radius, corners: corners) )

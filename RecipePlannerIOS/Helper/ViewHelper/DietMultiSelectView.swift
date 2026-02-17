@@ -1,39 +1,69 @@
 //
-//  DietMultiSelectView.swift
-//  RecipePlannerIOS
-//
-//  Created by Dominika Sieńko on 15/11/2025.
-//
-
 // DietMultiSelectView.swift
+// RecipePlannerIOS
+//
+// Created by Dominika Sieńko on 15/11/2025.
+//
 
 import SwiftUI
 
 struct DietMultiSelectView: View {
     @Binding var selectedDiets: [String]
     
+    private let wickedGreen = Color.wickedGreen
+    
     var body: some View {
-        ForEach(Constants.dietOptions, id: \.self) { diet in
-            HStack {
-                Text(diet)
-                Spacer()
-                // Jeśli dieta jest w tablicy, pokazujemy zaznaczenie
-                if selectedDiets.contains(diet) {
-                    Image(systemName: "checkmark").foregroundStyle(.blue)
+        List {
+            ForEach(Constants.dietOptions, id: \.self) { diet in
+                HStack {
+                    Text(diet)
+                        .font(.headline)
+                        .foregroundColor(.white)
+                    Spacer()
+                    
+                    if selectedDiets.contains(diet) {
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(.title2)
+                            .foregroundColor(wickedGreen)
+                    } else {
+                        Image(systemName: "circle")
+                            .font(.title2)
+                            .foregroundColor(.gray.opacity(0.5))
+                    }
                 }
-            }
-            .contentShape(Rectangle()) // Ważne: Sprawia, że cały wiersz jest dotykalny
-            .onTapGesture {
-                toggleSelection(diet)
+                .contentShape(Rectangle()) 
+                .onTapGesture {
+                    toggleSelection(diet)
+                }
+                
+                // MARK: - Row Styling
+                .padding(.vertical, 12)
+                .padding(.horizontal, 15)
+                .background(.ultraThinMaterial)
+                .clipShape(RoundedRectangle(cornerRadius: 15))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 15)
+                        .stroke(Color.white.opacity(0.15), lineWidth: 1)
+                )
+                .listRowBackground(Color.clear)
+                .listRowSeparator(.hidden)
+                .listRowInsets(EdgeInsets(top: 5, leading: 10, bottom: 5, trailing: 10))
             }
         }
+        .listStyle(.plain)
+        .navigationTitle("Select Diets")
+        .background(
+            Color.darkBackground
+                .edgesIgnoringSafeArea(.all)
+        )
     }
     
+    /// Logic to add or remove diet from the binding array
     private func toggleSelection(_ diet: String) {
         if let index = selectedDiets.firstIndex(of: diet) {
-            selectedDiets.remove(at: index) // Odznacz
+            selectedDiets.remove(at: index)
         } else {
-            selectedDiets.append(diet) // Zaznacz
+            selectedDiets.append(diet)
         }
     }
 }

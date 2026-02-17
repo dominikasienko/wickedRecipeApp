@@ -5,49 +5,81 @@
 //  Created by Dominika Sieńko on 15/11/2025.
 //
 
-// AuthManager.swift
-
 import Foundation
 import FirebaseAuth
 import FirebaseFirestore
+import Observation
 
-@Observable 
+@Observable
 class AuthManager {
-    // Publikowana zmienna, na którą UI będzie reagować
     var isAuthenticated: Bool = false
     var user: User?
     
-    // Inicjalizacja: Sprawdzenie stanu logowania
+    private var authHandle: AuthStateDidChangeListenerHandle?
+
     init() {
-        Auth.auth().addStateDidChangeListener { [weak self] _, user in
-            DispatchQueue.main.async { // Upewnienie się, że zmiana jest w głównym wątku
+        print("AuthManager: Instance initialized. Awaiting Firebase configuration...")
+    }
+
+    func setupAuthStateListener() {
+        if authHandle != nil { return }
+        
+        // Bezpieczne wywołanie Auth.auth() po konfiguracji FirebaseApp
+        self.authHandle = Auth.auth().addStateDidChangeListener { [weak self] _, user in
+            DispatchQueue.main.async {
                 self?.user = user
                 self?.isAuthenticated = user != nil
+                print("Auth status changed. UID \(user?.uid ?? "None")")
             }
         }
     }
+    
+// MARK: --- METODY AUTH ---
 
-    // --- METODY AUTH ---
-
-    // Metoda rejestracji zwracająca UID (jedyna wersja)
+    // Metoda rejestracji zwracająca UID
     func register(email: String, password: String) async throws -> String {
         let result = try await Auth.auth().createUser(withEmail: email, password: password)
         return result.user.uid
     }
 
-    // Metoda logowania
     func signIn(email: String, password: String) async throws {
         _ = try await Auth.auth().signIn(withEmail: email, password: password)
     }
 
-    // Metoda wylogowania
     func signOut() throws {
         try Auth.auth().signOut()
     }
+    
+    func sendPasswordReset(withEmail email: String) async throws {
+            try await Auth.auth().sendPasswordReset(withEmail: email)
+        }
 
-    // Metoda usunięcia konta
     func deleteAccount() async throws {
-        guard let user = Auth.auth().currentUser else { return }
-        try await user.delete()
+            guard let user = user else { throw NSError(domain: "AuthError", code: 401, userInfo: [NSLocalizedDescriptionKey: "No user logged in."]) }
+            try await user.delete()
+        }
+
+        func deleteUserAndData(
+            profileManager: ProfileManager,
+            recipeManager: RecipeManager,
+            storageManager: StorageManager
+        ) async throws {
+            
+            guard let userId = user?.uid else {
+                throw NSError(domain: "AuthError", code: 401, userInfo: [NSLocalizedDescriptionKey: "No user UID."])
+            }
+
+// MARK: Czyszczenie danych 
+            try await profileManager.deleteUserProfile(userId: userId)
+            try await recipeManager.deleteAllUserRecipes(userId: userId, storageManager: storageManager)
+            try await storageManager.deleteProfileImage(userId: userId)
+            try await deleteAccount()
+            
+            await MainActor.run {
+                self.user = nil
+                self.isAuthenticated = false
+            }
+            print("Account and all associated data for \(userId) successfully deleted.")
+        }
     }
-}
+

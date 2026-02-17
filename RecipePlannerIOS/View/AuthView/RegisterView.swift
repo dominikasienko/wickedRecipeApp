@@ -15,7 +15,6 @@ struct RegisterView: View {
     @Environment(StorageManager.self) private var storageManager
     @Environment(\.dismiss) private var dismiss
 
-    // Pola formularza
     @State private var email = ""
     @State private var password = ""
     @State private var confirmPassword = ""
@@ -28,33 +27,22 @@ struct RegisterView: View {
     @State private var selectedActivity = Constants.activityLevels[0]
     @State private var selectedDiets: [String] = []
     
-    // Zmienne zdjęcia
     @State private var userImage: UIImage?
     @State private var tempImageURL: String? = nil
     
     @State private var errorMessage: String?
 
-    // --- WICKED STYLE: Paleta kolorów ---
-    private let wickedGreen = Color(red: 0.0, green: 0.6, blue: 0.2)
-    private let glindaPink = Color(red: 1.0, green: 0.75, blue: 0.8)
-    private let darkBackground = Color(red: 0.1, green: 0.1, blue: 0.1)
-
     var body: some View {
-        // --- NavigationStack jest POPRAWNY (dzięki niemu diety działają) ---
         NavigationStack {
-            
-            // --- WICKED GLASS: Zastępujemy 'Form' przez 'ZStack' i 'ScrollView' ---
             ZStack {
-                // Tło z gradientem
-                darkBackground.ignoresSafeArea()
+                Color.darkBackground.ignoresSafeArea()
                 RadialGradient(
-                    colors: [wickedGreen.opacity(0.3), .clear],
+                    colors: [Color.wickedGreen.opacity(0.3), .clear],
                     center: .topLeading,
                     startRadius: 0,
                     endRadius: 700
                 ).ignoresSafeArea()
                 
-                // --- WICKED GLASS: Przycisk do zamykania sheet'a ---
                 VStack {
                     HStack {
                         Spacer()
@@ -69,31 +57,24 @@ struct RegisterView: View {
                     .padding([.top, .trailing], 20)
                     Spacer()
                 }
-                .zIndex(2) // Upewnij się, że jest nad kartą
+                .zIndex(2)
 
-                // --- WICKED GLASS: Główna "szklana karta" formularza ---
                 ScrollView(.vertical, showsIndicators: false) {
                     VStack(spacing: 20) {
-                        
-                        // Tytuł
                         Text("Create Account")
                             .font(.system(.largeTitle, design: .serif))
                             .fontWeight(.bold)
-                            .foregroundStyle(wickedGreen)
+                            .foregroundStyle(Color.wickedGreen)
                             .padding(.bottom, 10)
                         
-                        // --- Błąd ---
                         if let errorMessage {
                             Text(errorMessage)
                                 .foregroundStyle(.red)
                                 .frame(maxWidth: .infinity, alignment: .leading)
-                                .padding(.horizontal, 10) // Dodatkowy padding dla błędu
+                                .padding(.horizontal, 10)
                         }
 
-                        // --- Sekcja Zdjęcia ---
                         ProfileImagePickerView(profileImage: $userImage, profileImageURL: $tempImageURL)
-
-                        // --- Sekcja Konto ---
                         WickedSectionHeader(title: "Account Details")
                         
                         WickedFrostedRow {
@@ -113,7 +94,6 @@ struct RegisterView: View {
                             SecureField("Confirm password", text: $confirmPassword)
                         }
 
-                        // --- Sekcja Dane Osobowe ---
                         WickedSectionHeader(title: "Personal Details")
                         
                         WickedFrostedRow {
@@ -133,10 +113,9 @@ struct RegisterView: View {
                             DatePicker("", selection: $dateOfBirth, displayedComponents: .date)
                                 .labelsHidden()
                                 .colorInvert()
-                                .colorMultiply(glindaPink)
+                                .colorMultiply(Color.glindaPink)
                         }
 
-                        // --- Sekcja Szczegóły Fizyczne ---
                         WickedSectionHeader(title: "Physical Details")
                         
                         WickedFrostedRow {
@@ -159,7 +138,6 @@ struct RegisterView: View {
                                 .frame(width: 80)
                         }
                         
-                        // --- POPRAWKA: Zmieniony layout Pickera (Gender) ---
                         WickedFrostedRow(isPicker: true) {
                             Image(systemName: "person.circle.fill")
                             Text("Gender")
@@ -171,10 +149,7 @@ struct RegisterView: View {
                             .labelsHidden()
                         }
                         
-                        // --- Sekcja Cele i Aktywność ---
                         WickedSectionHeader(title: "Goals & Activities")
-                        
-                        // --- POPRAWKA: Zmieniony layout Pickera (Activity) ---
                         WickedFrostedRow(isPicker: true) {
                             Image(systemName: "figure.walk.circle.fill")
                             Text("Activity level")
@@ -186,26 +161,24 @@ struct RegisterView: View {
                             .labelsHidden()
                         }
                         
-                        // Nawigacja do wyboru diet (Działa poprawnie)
-                        NavigationLink(destination: DietSelectView(selectedDiets: $selectedDiets)) {
+                        NavigationLink(destination: DietMultiSelectView(selectedDiets: $selectedDiets)) {
                             WickedFrostedRow {
                                 Image(systemName: "fork.knife.circle.fill")
                                 Text("Select diets")
                                 Spacer()
                                 Text("(\(selectedDiets.count))")
-                                    .foregroundStyle(glindaPink)
+                                    .foregroundStyle(Color.glindaPink)
                                 Image(systemName: "chevron.right")
                                     .font(.caption.bold())
                             }
                         }
                         
-                        // --- Przycisk Zarejestruj ---
                         Button("Register & Create Profile", action: registerAndCreateProfile)
                             .font(.headline)
-                            .foregroundStyle(darkBackground)
+                            .foregroundStyle(Color.darkBackground)
                             .padding()
                             .frame(maxWidth: .infinity)
-                            .background(wickedGreen)
+                            .background(Color.wickedGreen)
                             .clipShape(Capsule())
                             .padding(.top, 20)
                         
@@ -223,17 +196,14 @@ struct RegisterView: View {
                 }
             }
             .preferredColorScheme(.dark)
-            .navigationBarHidden(true) // Ukrywamy pasek nawigacji stosu
-        } // --- Koniec NavigationStack ---
+            .navigationBarHidden(true)
+        }
     }
 
-    //
-    // Logika rejestracji (Z DODANĄ WALIDACJĄ)
-    //
+// MARK: Logika rejestracji
     private func registerAndCreateProfile() {
         self.errorMessage = nil
         
-        // --- POPRAWKA: Walidacja pustych pól ---
         guard !self.email.isEmpty,
               !self.password.isEmpty,
               !self.firstName.isEmpty,
@@ -284,7 +254,7 @@ struct RegisterView: View {
     }
 }
 
-// --- Widoki pomocnicze (bez zmian) ---
+// MARK: Widoki pomocnicze
 
 struct WickedSectionHeader: View {
     let title: String
@@ -292,7 +262,7 @@ struct WickedSectionHeader: View {
     var body: some View {
         Text(title)
             .font(.headline)
-            .foregroundStyle(Color(red: 1.0, green: 0.75, blue: 0.8)) // glindaPink
+            .foregroundStyle(Color.glindaPink)
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.top, 10)
     }
@@ -301,20 +271,17 @@ struct WickedSectionHeader: View {
 struct WickedFrostedRow<Content: View>: View {
     var isPicker: Bool = false
     @ViewBuilder var content: Content
-    
-    private let glindaPink = Color(red: 1.0, green: 0.75, blue: 0.8)
-    private let wickedGreen = Color(red: 0.0, green: 0.6, blue: 0.2)
 
     var body: some View {
         HStack(spacing: 15) {
             content
         }
-        .foregroundStyle(isPicker ? .white : glindaPink.opacity(0.8))
+        .foregroundStyle(isPicker ? .white : Color.glindaPink)
         .padding(.horizontal)
         .padding(.vertical, 12)
         .background(Color.white.opacity(0.1))
         .cornerRadius(12)
-        .tint(wickedGreen)
+        .tint(Color.wickedGreen)
         .colorScheme(.dark)
     }
 }

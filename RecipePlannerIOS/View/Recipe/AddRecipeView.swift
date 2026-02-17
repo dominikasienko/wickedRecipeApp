@@ -1,7 +1,14 @@
-// AddRecipeView.swift
+//
+//  AddRecipeView.swift
+//  RecipePlannerIOS
+//
+//  Created by Dominika Sieńko on 18/11/2025.
+//
+
 import SwiftUI
 import UIKit
 import FirebaseAuth
+import PhotosUI
 
 struct AddRecipeView: View {
     @Environment(RecipeManager.self) private var recipeManager
@@ -13,9 +20,15 @@ struct AddRecipeView: View {
     @State private var prepTime: Int = 30
     @State private var servings: Int = 4
     @State private var notes: String = ""
-    @State private var instructions: [String] = [""]
-    @State private var ingredients: [Ingredient] = [Ingredient(name: "", quantity: 0, unit: "g")]
-
+    @State private var sections: [RecipeSection] = [
+        RecipeSection(
+            title: "Ingredients & Steps",
+            ingredients: [Ingredient(name: "", quantity: 0, unit: "g")],
+            instructions: [""]
+        )
+    ]
+    
+    @State private var useSections: Bool = false
     @State private var selectedImage: UIImage?
     @State private var isShowingImagePicker = false
     @State private var showingSaveError = false
@@ -23,23 +36,32 @@ struct AddRecipeView: View {
     @Environment(\.dismiss) var dismiss
 
     let availableCategories: [String] = [
-        "BASICS", "BREAKFAST & BRUNCH", "APPETIZERS, SIDES & SALADS",
-        "SOUP, STEW & CURRY", "LUNCH & DINNER", "PASTA & GNOCCHI",
-        "CAKE", "SWEETS & DESSERT", "FINGERFOOD & SNACKS", "QUICK & EASY",
-        "PIZZA, SANDWICHES & BURGER", "INTERNATIONAL CUISINE", "VEGAN", "VEGETARIAN"
+        String(localized: "BASICS"),
+        String(localized: "BREAKFAST & BRUNCH"),
+        String(localized: "APPETIZERS, SIDES & SALADS"),
+        String(localized: "SOUP, STEW & CURRY"),
+        String(localized: "LUNCH & DINNER"),
+        String(localized: "PASTA & GNOCCHI"),
+        String(localized: "QUICK & EASY"),
+        String(localized: "PIZZA, SANDWICHES & BURGER"),
+        String(localized: "CAKE"),
+        String(localized: "FINGERFOOD & SNACKS"),
+        String(localized: "SWEETS & DESSERT")
     ].sorted()
 
     private var isFormValid: Bool {
-        !name.isEmpty &&
-        !ingredients.filter { !$0.name.isEmpty }.isEmpty &&
-        !instructions.filter { !$0.isEmpty }.isEmpty
+        guard !name.isEmpty else { return false }
+        
+        let allIngredients = sections.flatMap { $0.ingredients }.filter { !$0.name.isEmpty && $0.quantity >= 0 }
+        let allInstructions = sections.flatMap { $0.instructions }.filter { !$0.isEmpty }
+        
+        return !allIngredients.isEmpty && !allInstructions.isEmpty
     }
 
-    // MARK: - View Body (Wicked Glass Implementation)
+// MARK: - View Body
 
     var body: some View {
         ZStack {
-            // 1. Background (Dark Background Color + Blobs)
             Color.darkBackground.ignoresSafeArea()
             
             Ellipse()
@@ -56,22 +78,18 @@ struct AddRecipeView: View {
                 .blur(radius: 80)
                 .ignoresSafeArea()
 
-            // 2. Form/List Content (Glass Effect)
             List {
-                // 1. IMAGE SECTION
                 Section {
                     RecipeImagePicker(selectedImage: $selectedImage)
                         .onTapGesture {
                             isShowingImagePicker = true
                         }
-                        // Usunięcie domyślnego wcięcia dla Listy, aby zdjęcie było od krawędzi
                         .listRowInsets(EdgeInsets())
                 }
                 .listRowBackground(Color.clear)
                 .listRowSeparator(.hidden)
                 .headerProminence(.increased)
                 
-                // 2. GENERAL INFORMATION
                 Section("General Information") {
                     TextField("Recipe Name", text: $name)
                         .listRowBackground(Color.black.opacity(0.2))
@@ -97,7 +115,7 @@ struct AddRecipeView: View {
                     HStack {
                         Text("Number of Servings")
                         Spacer()
-                        Stepper("\(servings)", value: $servings, in: 1...20)
+                        Stepper("\(servings)", value: $servings, in: 1...32)
                     }
                     .listRowBackground(Color.black.opacity(0.2))
                     .foregroundStyle(.white)
@@ -105,13 +123,11 @@ struct AddRecipeView: View {
                 .headerProminence(.increased)
                 .listRowSeparatorTint(Color.white.opacity(0.3))
 
-                // 3. INGREDIENTS
-                IngredientsSection1(ingredients: $ingredients)
+                IngredientsSection(sections: $sections, useSections: $useSections)
+                    .listRowSeparatorTint(Color.white.opacity(0.3))
+                InstructionsSection(sections: $sections, useSections: $useSections)
+                    .listRowSeparatorTint(Color.white.opacity(0.3))
                 
-                // 4. INSTRUCTIONS
-                InstructionsSection1(instructions: $instructions)
-                
-                // 5. NOTES
                 Section("Notes / Tips (Optional)") {
                     TextEditor(text: $notes)
                         .frame(minHeight: 100)
@@ -124,7 +140,6 @@ struct AddRecipeView: View {
                 .headerProminence(.increased)
                 .listRowSeparatorTint(Color.white.opacity(0.3))
 
-                // 6. SAVE BUTTON
                 Section {
                     Button("Save Recipe") {
                         Task {
@@ -133,19 +148,18 @@ struct AddRecipeView: View {
                     }
                     .frame(maxWidth: .infinity)
                     .buttonStyle(.borderedProminent)
-                    // Zmiana koloru tinty na Wicked Green
                     .tint(Color.wickedGreen)
                     .disabled(!isFormValid)
                 }
                 .listRowBackground(Color.clear)
                 .listRowSeparator(.hidden)
 
-            } // End List
+            }
             .scrollContentBackground(.hidden)
             .listStyle(.grouped)
             .preferredColorScheme(.dark)
             
-        } // End ZStack
+        }
         .navigationTitle("Add Recipe")
         .sheet(isPresented: $isShowingImagePicker) {
             ImagePickerView(selectedImage: $selectedImage, isPresented: $isShowingImagePicker)
@@ -157,12 +171,38 @@ struct AddRecipeView: View {
         }
     }
     
-    // MARK: - Save Function (Unchanged)
+// MARK: - Save Function
     
     private func saveRecipe() async {
         guard let userId = authManager.user?.uid else {
             print("SAVE ERROR: No user UID.")
+            showingSaveError = true
             return
+        }
+        
+        let cleanedSections = sections
+            .map { section in
+                var cleaned = section
+                cleaned.ingredients = cleaned.ingredients.filter { !$0.name.isEmpty && $0.quantity >= 0 }
+                cleaned.instructions = cleaned.instructions.filter { !$0.isEmpty }
+                return cleaned
+            }
+            .filter { !$0.ingredients.isEmpty || !$0.instructions.isEmpty }
+        
+        let flatIngredients = cleanedSections.flatMap { $0.ingredients }
+        let flatInstructions = cleanedSections.flatMap { $0.instructions }
+        
+        guard !flatIngredients.isEmpty && !flatInstructions.isEmpty else {
+            print("SAVE ERROR: Ingredients or Instructions are empty after cleanup.")
+            showingSaveError = true
+            return
+        }
+        
+        let finalSections: [RecipeSection]?
+        if useSections || cleanedSections.count > 1 {
+            finalSections = cleanedSections
+        } else {
+            finalSections = nil
         }
         
         let newRecipe = Recipe(
@@ -171,8 +211,9 @@ struct AddRecipeView: View {
             category: category,
             preparationTimeMinutes: prepTime,
             servings: servings,
-            ingredients: ingredients.filter { !$0.name.isEmpty },
-            instructions: instructions.filter { !$0.isEmpty },
+            ingredients: flatIngredients,
+            instructions: flatInstructions,
+            sections: finalSections,
             notes: notes.isEmpty ? nil : notes,
             imageURL: nil,
             dateAdded: Date(),
@@ -180,89 +221,18 @@ struct AddRecipeView: View {
         )
         
         do {
-            try await recipeManager.saveNewRecipe(recipe: newRecipe, image: selectedImage, storageManager: storageManager)
-            print("Recipe saved successfully!")
+            let saved = try await recipeManager.saveRecipe(
+                recipe: newRecipe,
+                newImage: selectedImage,
+                existingImageURL: nil,
+                storageManager: storageManager
+            )
+            
+            print("Recipe saved successfully! ID: \(saved.id ?? "unknown")")
             dismiss()
         } catch {
-            print("FATAL ERROR IN RECORDING THE RECIPE: \(error)")
+            print("FATAL ERROR IN RECORDING THE RECIPE: \(error.localizedDescription)")
             showingSaveError = true
         }
-    }
-}
-
-// MARK: Dodatkowe komponenty potrzebne do kompilacji:
-
-
-// C) IngredientsSection (Dostosowany do Glassmorphismu)
-struct IngredientsSection1: View {
-    @Binding var ingredients: [Ingredient]
-    let quantityFormatter: NumberFormatter = {
-        let formatter = NumberFormatter()
-        formatter.numberStyle = .decimal
-        formatter.maximumFractionDigits = 2
-        return formatter
-    }()
-    
-    var body: some View {
-        Section("Ingredients") {
-            ForEach($ingredients) { $ingredient in
-                HStack {
-                    TextField("Name", text: $ingredient.name)
-                    Spacer()
-                    TextField("Qty", value: $ingredient.quantity, formatter: quantityFormatter)
-                        .keyboardType(.decimalPad)
-                        .frame(width: 50)
-                        .multilineTextAlignment(.trailing)
-                    TextField("Unit", text: $ingredient.unit)
-                        .frame(width: 50)
-                        .multilineTextAlignment(.trailing)
-                }
-                .listRowBackground(Color.black.opacity(0.2))
-                .foregroundStyle(.white)
-            }
-            .onDelete { ingredients.remove(atOffsets: $0) }
-            
-            Button("Add Ingredient") {
-                ingredients.append(Ingredient(name: "", quantity: 0, unit: "g"))
-            }
-            .listRowBackground(Color.black.opacity(0.2))
-            .foregroundStyle(Color.wickedGreen)
-        }
-        .headerProminence(.increased)
-        .listRowSeparatorTint(Color.white.opacity(0.3))
-    }
-}
-
-// D) InstructionsSection (Dostosowany do Glassmorphismu)
-struct InstructionsSection1: View {
-    @Binding var instructions: [String]
-    
-    var body: some View {
-        Section("Instructions") {
-            ForEach(instructions.indices, id: \.self) { index in
-                VStack(alignment: .leading) {
-                    Text("Step \(index + 1):")
-                        .font(.caption).bold()
-                        .foregroundStyle(Color.glindaPink)
-                    TextEditor(text: $instructions[index])
-                        .frame(minHeight: 80)
-                        .border(Color.gray.opacity(0.3))
-                        .scrollContentBackground(.hidden)
-                        .background(Color.black.opacity(0.1))
-                        .cornerRadius(8)
-                }
-                .listRowBackground(Color.black.opacity(0.2))
-                .foregroundStyle(.white)
-            }
-            .onDelete { instructions.remove(atOffsets: $0) }
-            
-            Button("Add Step") {
-                instructions.append("")
-            }
-            .listRowBackground(Color.black.opacity(0.2))
-            .foregroundStyle(Color.wickedGreen)
-        }
-        .headerProminence(.increased)
-        .listRowSeparatorTint(Color.white.opacity(0.3))
     }
 }
