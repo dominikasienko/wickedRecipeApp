@@ -1,5 +1,6 @@
 import SwiftUI
 import FirebaseCore 
+import FirebaseAuth
 
 class AppDelegate: NSObject, UIApplicationDelegate {
     
@@ -27,10 +28,23 @@ struct RecipePlannerIOSApp: App {
     @State private var waterManager: WaterManager?
     @State private var mealPlanManager: MealPlannerManager?
     @State private var notificationManager = NotificationManager()
+    @AppStorage("appLanguagePreference") private var appLanguagePreferenceRaw: String = "system"
 
     
     init() {
         delegate.authManager = authManager
+    }
+    
+    private var appLocale: Locale {
+        if appLanguagePreferenceRaw == "system" {
+            return Locale.autoupdatingCurrent
+        }
+
+        guard AppLocalization.supportedLanguageIdentifiers.contains(appLanguagePreferenceRaw) else {
+            return Locale.autoupdatingCurrent
+        }
+
+        return Locale(identifier: appLanguagePreferenceRaw)
     }
     
     var body: some Scene {
@@ -43,6 +57,11 @@ struct RecipePlannerIOSApp: App {
                 .environment(waterManager)
                 .environment(mealPlanManager)
                 .environment(notificationManager)
+                .environment(\.locale, appLocale)
+                .preferredColorScheme(.dark)
+                .onOpenURL { url in
+                    _ = Auth.auth().canHandle(url)
+                }
         }
     }
 }

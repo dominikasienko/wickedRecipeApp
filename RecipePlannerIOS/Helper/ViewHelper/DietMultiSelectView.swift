@@ -14,14 +14,14 @@ struct DietMultiSelectView: View {
     
     var body: some View {
         List {
-            ForEach(Constants.dietOptions, id: \.self) { diet in
+            ForEach(AppOptionCatalog.dietOptions) { diet in
                 HStack {
-                    Text(diet)
+                    Text(diet.title)
                         .font(.headline)
                         .foregroundColor(.white)
                     Spacer()
                     
-                    if selectedDiets.contains(diet) {
+                    if selectedDiets.contains(diet.id) {
                         Image(systemName: "checkmark.circle.fill")
                             .font(.title2)
                             .foregroundColor(wickedGreen)
@@ -33,7 +33,7 @@ struct DietMultiSelectView: View {
                 }
                 .contentShape(Rectangle()) 
                 .onTapGesture {
-                    toggleSelection(diet)
+                    toggleSelection(diet.id)
                 }
                 
                 // MARK: - Row Styling

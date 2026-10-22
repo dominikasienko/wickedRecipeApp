@@ -17,159 +17,290 @@ struct RecipeDetailView: View {
     let recipe: Recipe
     
     @State private var selectedTab: Int = 0
+    @State private var detailNutritionResult: NutritionCalculationResult?
+    @State private var isCalculatingNutrition = false
+    @State private var nutritionInfoMessage: LocalizedStringKey?
     
     private let wickedGreen = Color(red: 0.0, green: 0.6, blue: 0.2)
     private let glindaPink = Color(red: 1.0, green: 0.75, blue: 0.8)
     private let darkBackground = Color(red: 0.1, green: 0.1, blue: 0.1)
+    private let nutritionCalculator = RecipeNutritionCalculator.shared
+    
+    private var currentRecipe: Recipe {
+        guard let recipeId = recipe.id else { return recipe }
+        return recipeManager.userRecipes.first(where: { $0.id == recipeId }) ?? recipe
+    }
+    
+    private var storedNutritionResult: NutritionCalculationResult? {
+        currentRecipe.nutrition?.asCalculationResult
+    }
+    
+    private var displayedNutritionResult: NutritionCalculationResult? {
+        storedNutritionResult ?? detailNutritionResult
+    }
+    
+    private var shouldShowCalculateButton: Bool {
+        storedNutritionResult == nil
+    }
 
     init(recipe: Recipe) {
         self.recipe = recipe
-        
-        UISegmentedControl.appearance().selectedSegmentTintColor = .init(wickedGreen)
-        UISegmentedControl.appearance().setTitleTextAttributes([.foregroundColor: UIColor.black], for: .selected)
-        UISegmentedControl.appearance().backgroundColor = .init(white: 0.1, alpha: 0.3)
-        UISegmentedControl.appearance().setTitleTextAttributes([.foregroundColor: UIColor.white], for: .normal)
     }
     
     var body: some View {
         GeometryReader { proxy in
-            let safeAreaInsets = proxy.safeAreaInsets
+            detailContent(proxy: proxy)
+        }
+    }
+    
+    @ViewBuilder
+    private func detailContent(proxy: GeometryProxy) -> some View {
+        let safeTopInset = proxy.safeAreaInsets.top
+        let displayedRecipe = currentRecipe
+        
+        ZStack(alignment: .top) {
+            darkBackground.ignoresSafeArea()
+            Ellipse()
+                .fill(wickedGreen.opacity(0.4))
+                .frame(width: 300, height: 300)
+                .position(x: 50, y: 200)
+                .blur(radius: 100)
             
-            ZStack(alignment: .top) {
-                darkBackground.ignoresSafeArea()
-                Ellipse()
-                    .fill(wickedGreen.opacity(0.4))
-                    .frame(width: 300, height: 300)
-                    .position(x: 50, y: 200)
-                    .blur(radius: 100)
-                
-                Ellipse()
-                    .fill(glindaPink.opacity(0.3))
-                    .frame(width: 250, height: 250)
-                    .position(x: proxy.size.width - 50, y: proxy.size.height - 100)
-                    .blur(radius: 80)
-                
-                ScrollView(.vertical, showsIndicators: false) {
-                    VStack(spacing: 0) {
-                        GeometryReader { geo in
-                            let minY = geo.frame(in: .global).minY
-                            let isScrollingDown = minY > safeAreaInsets.top
-                            
-                            AsyncImageView(urlString: recipe.imageURL ?? "")
-                                .scaledToFill()
-                                .frame(
-                                    width: geo.size.width,
-                                    height: 350 + (isScrollingDown ? (minY - safeAreaInsets.top) : 0)
-                                )
-                                .overlay(
-                                    LinearGradient(
-                                        colors: [.black.opacity(0.3), .clear, .black.opacity(0.2)],
-                                        startPoint: .top,
-                                        endPoint: .bottom
-                                    )
-                                )
-                                .clipped()
-                                .offset(y: isScrollingDown ? -(minY - safeAreaInsets.top) : 0)
-                        }
-                        .frame(height: 350)
+            Ellipse()
+                .fill(glindaPink.opacity(0.3))
+                .frame(width: 250, height: 250)
+                .position(x: proxy.size.width - 50, y: proxy.size.height - 100)
+                .blur(radius: 80)
+            
+            ScrollView(.vertical, showsIndicators: false) {
+                VStack(spacing: 0) {
+                    GeometryReader { geo in
+                        let minY = geo.frame(in: .global).minY
+                        let isScrollingDown = minY > safeTopInset
                         
-                        VStack(alignment: .leading, spacing: 20) {
-                            Text(recipe.name)
-                                .font(.system(.largeTitle, design: .serif))
-                                .fontWeight(.bold)
-                                .foregroundStyle(wickedGreen)
-                            
+                        AsyncImageView(urlString: displayedRecipe.imageURL ?? "")
+                            .scaledToFill()
+                            .frame(
+                                width: geo.size.width,
+                                height: 350 + (isScrollingDown ? (minY - safeTopInset) : 0)
+                            )
+                            .overlay(
+                                LinearGradient(
+                                    colors: [.black.opacity(0.3), .clear, .black.opacity(0.2)],
+                                    startPoint: .top,
+                                    endPoint: .bottom
+                                )
+                            )
+                            .clipped()
+                            .offset(y: isScrollingDown ? -(minY - safeTopInset) : 0)
+                    }
+                    .frame(height: 350)
+                    
+                    VStack(alignment: .leading, spacing: 20) {
+                        Text(displayedRecipe.name)
+                            .font(.system(.largeTitle, design: .serif))
+                            .fontWeight(.bold)
+                            .foregroundStyle(wickedGreen)
+                            .lineLimit(3)
+                            .minimumScaleFactor(0.8)
+                            .fixedSize(horizontal: false, vertical: true)
+                        
+                        ViewThatFits {
                             HStack(spacing: 12) {
                                 WickedInfoCapsule(
                                     icon: "clock.fill",
-                                    text: "\(recipe.preparationTimeMinutes) min"
+                                    text: "\(displayedRecipe.preparationTimeMinutes) min"
                                 )
                                 WickedInfoCapsule(
                                     icon: "person.2.fill",
-                                    text: "\(recipe.servings) servings"
+                                    text: "\(displayedRecipe.servings) servings"
                                 )
                                 WickedInfoCapsule(
                                     icon: "tag.fill",
-                                    text: recipe.category
+                                    text: AppOptionCatalog.localizedTitle(
+                                        for: displayedRecipe.category,
+                                        in: AppOptionCatalog.recipeCategories
+                                    )
                                 )
-                                Spacer()
+                                Spacer(minLength: 0)
                             }
                             
-                            Divider().overlay(glindaPink.opacity(0.5))
-
-                            Picker("Details", selection: $selectedTab) {
-                                Text("Ingredients").tag(0)
-                                Text("Instructions").tag(1)
-                            }
-                            .pickerStyle(.segmented)
-                            
-                            if selectedTab == 0 {
-                                IngredientsLayout(
-                                    sections: recipe.sections ?? [],
-                                    ingredients: recipe.ingredients
+                            VStack(alignment: .leading, spacing: 8) {
+                                HStack(spacing: 10) {
+                                    WickedInfoCapsule(
+                                        icon: "clock.fill",
+                                        text: "\(displayedRecipe.preparationTimeMinutes) min"
+                                    )
+                                    WickedInfoCapsule(
+                                        icon: "person.2.fill",
+                                        text: "\(displayedRecipe.servings) servings"
+                                    )
+                                }
+                                WickedInfoCapsule(
+                                    icon: "tag.fill",
+                                    text: AppOptionCatalog.localizedTitle(
+                                        for: displayedRecipe.category,
+                                        in: AppOptionCatalog.recipeCategories
+                                    )
                                 )
-                            } else {
-                                InstructionsLayout(
-                                    sections: recipe.sections ?? [],
-                                    instructions: recipe.instructions
-                                )
-                            }
-                            
-                            if let notes = recipe.notes, !notes.isEmpty {
-                                NotesSection(notes: notes)
                             }
                         }
-                        .padding(25)
-                        .background(.ultraThinMaterial)
-                        .cornerRadius(25, corners: [.topLeft, .topRight])
-                        .padding(.top, -50)
-                    }
-                }
-                .ignoresSafeArea(.container, edges: .top)
+                        
+                        Divider().overlay(glindaPink.opacity(0.5))
 
-                HStack {
-                    WickedGlassButton(icon: "chevron.backward", action: {
-                        dismiss()
-                    })
-                    
-                    Spacer()
-                    
-                    WickedGlassButton(
-                        icon: recipe.isFavorite ? "heart.fill" : "heart",
-                        color: recipe.isFavorite ? glindaPink : .white,
-                        action: {
-                            toggleFavorite()
+                        Picker("Details", selection: $selectedTab) {
+                            Text("Ingredients").tag(0)
+                            Text("Instructions").tag(1)
                         }
-                    )
-                    
-                    NavigationLink {
-                        EditRecipeView(recipe: recipe)
-                            .navigationTitle("Edit recipe")
-                    } label: {
-                        Image(systemName: "pencil")
-                            .font(.system(size: 16, weight: .medium))
-                            .frame(width: 40, height: 40)
-                            .background(.ultraThinMaterial)
-                            .foregroundStyle(.white)
-                            .clipShape(Circle())
-                            .overlay(
-                                Circle().stroke(Color.white.opacity(0.2), lineWidth: 1)
+                        .pickerStyle(.segmented)
+                        
+                        if selectedTab == 0 {
+                            IngredientsLayout(
+                                sections: displayedRecipe.sections ?? [],
+                                ingredients: displayedRecipe.ingredients
                             )
+                        } else {
+                            InstructionsLayout(
+                                sections: displayedRecipe.sections ?? [],
+                                instructions: displayedRecipe.instructions
+                            )
+                        }
+                        
+                        if let notes = displayedRecipe.notes, !notes.isEmpty {
+                            NotesSection(notes: notes)
+                        }
+                        
+                        NutritionCalculationPanel(
+                            result: displayedNutritionResult,
+                            isCalculating: isCalculatingNutrition,
+                            infoMessage: nutritionInfoMessage,
+                            showCalculateButton: shouldShowCalculateButton,
+                            onCalculate: calculateNutritionValues
+                        )
                     }
+                    .padding(25)
+                    .background(.ultraThinMaterial)
+                    .cornerRadius(25, corners: [.topLeft, .topRight])
+                    .padding(.top, -50)
                 }
-                .padding(.horizontal)
-                .padding(.top, safeAreaInsets.top + 5)
-                
             }
-            .navigationBarHidden(true)
-            .preferredColorScheme(.dark)
+            .ignoresSafeArea(.container, edges: .top)
+
         }
+        .overlay(alignment: .top) {
+            HStack {
+                WickedGlassButton(icon: "chevron.backward", action: {
+                    dismiss()
+                })
+                
+                Spacer()
+                
+                WickedGlassButton(
+                    icon: displayedRecipe.isFavorite ? "heart.fill" : "heart",
+                    color: displayedRecipe.isFavorite ? glindaPink : .white,
+                    action: {
+                        toggleFavorite()
+                    }
+                )
+                
+                NavigationLink {
+                    EditRecipeView(
+                        recipe: displayedRecipe,
+                        onRecipeDeleted: { dismiss() }
+                    )
+                        .navigationTitle("Edit recipe")
+                } label: {
+                    Image(systemName: "pencil")
+                        .font(.system(size: 16, weight: .medium))
+                        .frame(width: 44, height: 44)
+                        .background(.ultraThinMaterial)
+                        .foregroundStyle(.white)
+                        .clipShape(Circle())
+                        .overlay(
+                            Circle().stroke(Color.white.opacity(0.2), lineWidth: 1)
+                        )
+                }
+            }
+            .padding(.horizontal)
+            .padding(.top, safeTopInset + 6)
+            .zIndex(3)
+        }
+        .onAppear {
+            let selectedColor = UIColor(Color(red: 0.0, green: 0.6, blue: 0.2))
+            UISegmentedControl.appearance().selectedSegmentTintColor = selectedColor
+            UISegmentedControl.appearance().setTitleTextAttributes([.foregroundColor: UIColor.black], for: .selected)
+            UISegmentedControl.appearance().backgroundColor = UIColor(white: 0.1, alpha: 0.3)
+            UISegmentedControl.appearance().setTitleTextAttributes([.foregroundColor: UIColor.white], for: .normal)
+        }
+        .toolbar(.hidden, for: .navigationBar)
     }
     
     private func toggleFavorite() {
         Task {
-            guard let recipeId = recipe.id else { return }
+            guard let recipeId = currentRecipe.id else { return }
             try? await recipeManager.toggleFavorite(recipeId: recipeId)
+        }
+    }
+    
+    private var ingredientsForNutrition: [Ingredient] {
+        let sectionIngredients = (currentRecipe.sections ?? []).flatMap { $0.ingredients }
+        return sectionIngredients.isEmpty ? currentRecipe.ingredients : sectionIngredients
+    }
+    
+    private func calculateNutritionValues() {
+        guard !isCalculatingNutrition else { return }
+        guard shouldShowCalculateButton else { return }
+        
+        isCalculatingNutrition = true
+        nutritionInfoMessage = nil
+        
+        let ingredients = ingredientsForNutrition
+        let servings = currentRecipe.servings
+        let relatedRecipes = recipeManager.userRecipes
+        let currentRecipeID = currentRecipe.id
+        let currentRecipeName = currentRecipe.name
+        
+        Task {
+            let result = await nutritionCalculator.calculate(
+                ingredients: ingredients,
+                servings: servings,
+                relatedRecipes: relatedRecipes,
+                currentRecipeId: currentRecipeID,
+                currentRecipeName: currentRecipeName
+            )
+            
+            var persistenceError: LocalizedStringKey?
+            if result.totalIngredients > 0 {
+                if let recipeId = currentRecipeID {
+                    do {
+                        try await recipeManager.updateRecipeNutrition(
+                            recipeId: recipeId,
+                            nutrition: result.toStoredNutrition()
+                        )
+                    } catch {
+                        persistenceError = AppLocalization.key( "Values were calculated, but could not be saved yet.")
+                    }
+                } else {
+                    persistenceError = AppLocalization.key( "Values were calculated locally. Save the recipe first to keep them.")
+                }
+            }
+            
+            await MainActor.run {
+                detailNutritionResult = result
+                isCalculatingNutrition = false
+                
+                if let persistenceError {
+                    nutritionInfoMessage = persistenceError
+                } else if result.totalIngredients == 0 {
+                    nutritionInfoMessage = AppLocalization.key( "Add ingredients with quantities first.")
+                } else if result.matchedIngredients == 0 {
+                    nutritionInfoMessage = AppLocalization.key( "No matching nutrition records were found.")
+                } else if !result.missingIngredients.isEmpty {
+                    nutritionInfoMessage = AppLocalization.key( "Some ingredients were not matched. Values are based on available data.")
+                } else {
+                    nutritionInfoMessage = nil
+                }
+            }
         }
     }
 }
@@ -199,29 +330,32 @@ struct IngredientsLayout: View {
 }
 
 private struct IngredientList: View {
+    @Environment(\.locale) private var locale
     let ingredients: [Ingredient]
     let glindaPink: Color
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             ForEach(ingredients, id: \.id) { ingredient in
-                HStack {
+                HStack(alignment: .top, spacing: 10) {
                     Image(systemName: "circle.dotted")
                         .font(.caption)
                         .foregroundStyle(glindaPink)
                     
                     Text(ingredient.name)
                         .foregroundStyle(.white)
+                        .lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
                     
                     Spacer()
                     
-                    let quantityText = ingredient.quantity.truncatingRemainder(dividingBy: 1) == 0 ?
-                                       String(format: "%.0f", ingredient.quantity) :
-                                       String(format: "%.1f", ingredient.quantity)
-
-                    Text("\(quantityText) \(ingredient.unit)")
+                    HStack(spacing: 0) {
+                        Text(IngredientQuantityFormatter.formatted(ingredient.quantity, locale: locale))
+                        Text(verbatim: " \(ingredient.unit)")
+                    }
                         .foregroundStyle(.white.opacity(0.7))
                         .bold()
+                        .lineLimit(1)
                 }
                 .padding()
                 .background(Color.black.opacity(0.2))
@@ -296,6 +430,8 @@ private struct SectionHeader: View {
             Text(title)
                 .font(.title3).bold()
                 .foregroundStyle(wickedGreen)
+                .lineLimit(2)
+                .fixedSize(horizontal: false, vertical: true)
         }
         .padding(.top, 10)
     }
@@ -305,12 +441,14 @@ private struct SectionHeader: View {
 
 struct WickedInfoCapsule: View {
     let icon: String
-    let text: String
+    let text: LocalizedStringKey
     
     var body: some View {
         HStack(spacing: 6) {
             Image(systemName: icon)
             Text(text)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
         }
         .font(.caption.bold())
         .foregroundStyle(.white)
@@ -333,7 +471,7 @@ struct WickedGlassButton: View {
         Button(action: action) {
             Image(systemName: icon)
                 .font(.system(size: 16, weight: .medium))
-                .frame(width: 40, height: 40)
+                .frame(width: 44, height: 44)
                 .background(.ultraThinMaterial)
                 .foregroundStyle(color)
                 .clipShape(Circle())

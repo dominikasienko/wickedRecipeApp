@@ -1,0 +1,51 @@
+RecipePlannerIOS Test Report
+Date: 2026-10-19
+Status: PARTIAL RUN - TEST SESSION INTERRUPTED
+
+Environment
+- Xcode: 26.6
+- Simulator: iPhone 17, iOS 26.4
+- Scheme: RecipePlannerIOS
+- Command: xcodebuild test, serial execution, code signing disabled
+- Result bundle: /tmp/RecipePlannerIOS-TestResults-20261019.xcresult
+- Full log: /tmp/RecipePlannerIOS-TestResults-20261019.log
+
+Results
+- Unit tests: 6 executed; 5 passed, 1 failed.
+- UI tests: 4 executed; 1 passed, 3 failed.
+- Launch/screenshot test: 54 configuration runs passed. The next configuration was interrupted when available disk space fell to 117 MB.
+- Overall xcodebuild status: TEST INTERRUPTED. The full test plan did not complete.
+- The app and test targets built and launched successfully before test execution.
+
+Failures
+1. RecipePlannerIOSTests.testIngredientDescriptionForAPI
+   RecipePlannerIOSTests/RecipePlannerIOSTests.swift:85
+   Expected: "1.6 cups Flour"; actual: "1.55 cups Flour".
+
+2. RecipePlannerIOSUITests.testNavigationTabBarItemsExist
+   RecipePlannerIOSUITests/RecipePlannerIOSUITests.swift:27
+   The expected Home tab was not visible in the accessibility tab bar.
+
+3. RecipePlannerIOSUITests.testProfileSettingsNavigation
+   RecipePlannerIOSUITests/RecipePlannerIOSUITests.swift:47
+   The Profile button could not be found under a tab bar.
+
+4. RecipePlannerIOSUITests.testWaterTrackerNavigation
+   RecipePlannerIOSUITests/RecipePlannerIOSUITests.swift:37
+   The expected Water tracker tab was not present.
+
+Passing checks
+- Unit tests: date start-of-day, TDEE calculation, profile age, water goal, and water-record total intake.
+- UI launch performance test passed (reported average launch time: 2.723 seconds; Xcode also reported 26.222% relative standard deviation).
+- 54 repeated launch/screenshot checks completed successfully before the launch-test matrix was interrupted.
+
+Disk cleanup
+- Ran xcodebuild clean for this project and cleared its regenerable DerivedData index/module caches.
+- Preserved project sources, Swift package checkouts, simulator runtimes, and the partial .xcresult bundle.
+- Swift package checkouts remain cached (about 1.8 GB).
+- Available disk space after cleanup: about 1.3 GB at report creation. Xcode may regenerate its index/module caches during future builds.
+
+Notes
+- No project source files were changed during this test/cleanup task.
+- The test plan's launch test opts into running for each target-application UI configuration, which produced many repeated simulator launches and contributed to disk pressure.
+- The partial .xcresult and full log are retained at the paths listed above for further inspection.

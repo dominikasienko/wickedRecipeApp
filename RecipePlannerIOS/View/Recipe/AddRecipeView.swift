@@ -12,6 +12,7 @@ import PhotosUI
 
 struct AddRecipeView: View {
     @Environment(RecipeManager.self) private var recipeManager
+    @Environment(\.locale) private var locale
     @Environment(AuthManager.self) private var authManager
     @Environment(StorageManager.self) private var storageManager
 
@@ -32,22 +33,17 @@ struct AddRecipeView: View {
     @State private var selectedImage: UIImage?
     @State private var isShowingImagePicker = false
     @State private var showingSaveError = false
+    @State private var saveErrorMessage: LocalizedStringKey = AppLocalization.key("The recipe could not be saved. Check your connection or permissions.")
     
     @Environment(\.dismiss) var dismiss
 
-    let availableCategories: [String] = [
-        String(localized: "BASICS"),
-        String(localized: "BREAKFAST & BRUNCH"),
-        String(localized: "APPETIZERS, SIDES & SALADS"),
-        String(localized: "SOUP, STEW & CURRY"),
-        String(localized: "LUNCH & DINNER"),
-        String(localized: "PASTA & GNOCCHI"),
-        String(localized: "QUICK & EASY"),
-        String(localized: "PIZZA, SANDWICHES & BURGER"),
-        String(localized: "CAKE"),
-        String(localized: "FINGERFOOD & SNACKS"),
-        String(localized: "SWEETS & DESSERT")
-    ].sorted()
+    private var availableCategories: [AppLocalizedOption] {
+        AppOptionCatalog.recipeCategories.sorted {
+            $0.resolvedTitle(locale: locale).localizedCaseInsensitiveCompare(
+                $1.resolvedTitle(locale: locale)
+            ) == .orderedAscending
+        }
+    }
 
     private var isFormValid: Bool {
         guard !name.isEmpty else { return false }
@@ -91,13 +87,17 @@ struct AddRecipeView: View {
                 .headerProminence(.increased)
                 
                 Section("General Information") {
-                    TextField("Recipe Name", text: $name)
-                        .listRowBackground(Color.black.opacity(0.2))
-                        .foregroundStyle(.white)
+                    NativeTextField(
+                        text: $name,
+                        placeholder: "Recipe Name",
+                        autocorrectionType: .default,
+                        autocapitalizationType: .words
+                    )
+                    .listRowBackground(Color.black.opacity(0.2))
                     
                     Picker("Category", selection: $category) {
-                        ForEach(availableCategories, id: \.self) { category in
-                            Text(category).tag(category)
+                        ForEach(availableCategories) { category in
+                            Text(category.title).tag(category.id)
                                 .foregroundStyle(.white)
                         }
                     }
@@ -129,9 +129,8 @@ struct AddRecipeView: View {
                     .listRowSeparatorTint(Color.white.opacity(0.3))
                 
                 Section("Notes / Tips (Optional)") {
-                    TextEditor(text: $notes)
+                    NativeTextView(text: $notes)
                         .frame(minHeight: 100)
-                        .scrollContentBackground(.hidden)
                         .background(Color.black.opacity(0.1))
                         .cornerRadius(8)
                 }
@@ -157,7 +156,6 @@ struct AddRecipeView: View {
             }
             .scrollContentBackground(.hidden)
             .listStyle(.grouped)
-            .preferredColorScheme(.dark)
             
         }
         .navigationTitle("Add Recipe")
@@ -167,7 +165,7 @@ struct AddRecipeView: View {
         .alert("Saving Error", isPresented: $showingSaveError) {
             Button("OK", role: .cancel) { }
         } message: {
-            Text("The recipe could not be saved. Check your connection or permissions.")
+            Text(saveErrorMessage)
         }
     }
     
@@ -176,6 +174,7 @@ struct AddRecipeView: View {
     private func saveRecipe() async {
         guard let userId = authManager.user?.uid else {
             print("SAVE ERROR: No user UID.")
+            saveErrorMessage = AppLocalization.key( "The recipe could not be saved. Check your connection or permissions.")
             showingSaveError = true
             return
         }
@@ -194,6 +193,7 @@ struct AddRecipeView: View {
         
         guard !flatIngredients.isEmpty && !flatInstructions.isEmpty else {
             print("SAVE ERROR: Ingredients or Instructions are empty after cleanup.")
+            saveErrorMessage = AppLocalization.key( "The recipe could not be saved. Check your connection or permissions.")
             showingSaveError = true
             return
         }
@@ -231,7 +231,9 @@ struct AddRecipeView: View {
             print("Recipe saved successfully! ID: \(saved.id ?? "unknown")")
             dismiss()
         } catch {
-            print("FATAL ERROR IN RECORDING THE RECIPE: \(error.localizedDescription)")
+            let nsError = error as NSError
+            print("FATAL ERROR IN RECORDING THE RECIPE [\(nsError.domain):\(nsError.code)]: \(nsError.localizedDescription)")
+            saveErrorMessage = AppLocalization.key("The recipe could not be saved. Check your connection or permissions.")
             showingSaveError = true
         }
     }

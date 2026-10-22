@@ -9,12 +9,17 @@ import SwiftUI
 
 struct WaterHistoryView: View {
     @Environment(WaterManager.self) private var waterManager
+    @AppStorage("selectedWickedCharacter") private var selectedCharacterRaw: String = WickedCharacter.glinda.rawValue
+
+    private var selectedCharacter: WickedCharacter {
+        WickedCharacter(rawValue: selectedCharacterRaw) ?? .glinda
+    }
 
     private var allEntries: [WaterEntry] {
         waterManager.allRecords.flatMap { $0.entries }
     }
 
-    private var totalHistoricalIntake: Double {
+    private var totalHistoricalBeverageVolume: Double {
         let calendar = Calendar.current
         let historicalLogs = allEntries.filter { entry in
             !calendar.isDateInToday(entry.timestamp)
@@ -46,8 +51,10 @@ struct WaterHistoryView: View {
             ScrollView {
                 VStack(spacing: 20) {
                     
-                    if totalHistoricalIntake > 0 {
-                        HistoricalSummaryCard(totalIntake: totalHistoricalIntake)
+                    if totalHistoricalBeverageVolume > 0 {
+                        HistoricalSummaryCard(
+                            totalVolume: totalHistoricalBeverageVolume
+                        )
                             .padding([.horizontal, .top])
                     }
 
@@ -61,7 +68,7 @@ struct WaterHistoryView: View {
                             if let logs = groupedEntries[date], !logs.isEmpty {
                                 Section {
                                     ForEach(logs.sorted(by: { $0.timestamp > $1.timestamp })) { entry in
-                                        LogEntryRow(entry: entry)
+                                        LogEntryRow(entry: entry, waterColor: selectedCharacter.waterColor)
                                             .listRowBackground(Color.clear)
                                     }
                                 } header: {
@@ -77,8 +84,6 @@ struct WaterHistoryView: View {
             }
         }
         .navigationTitle("Hydration History")
-        .toolbarColorScheme(.dark, for: .navigationBar)
-        .preferredColorScheme(.dark)
     }
     
     private func dateTodayColor(date: Date) -> Color {
@@ -92,7 +97,7 @@ struct WaterHistoryView: View {
 
 // MARK: --- KARTA PODSUMOWANIA HISTORYCZNEGO ---
 struct HistoricalSummaryCard: View {
-    let totalIntake: Double
+    let totalVolume: Double
     
     var body: some View {
         VStack(alignment: .leading) {
@@ -106,11 +111,11 @@ struct HistoricalSummaryCard: View {
                     .foregroundStyle(Color.wickedGreen)
                 
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("\(Int(totalIntake)) ml")
+                    Text("\(Int(totalVolume)) ml")
                         .font(.largeTitle).bold()
                         .foregroundStyle(Color.glindaPink)
                     
-                    Text("Total water logged before today.")
+                    Text(AppLocalization.key("Total logged beverage volume before today."))
                         .font(.caption)
                         .foregroundStyle(.white.opacity(0.6))
                 }
@@ -129,15 +134,26 @@ struct HistoricalSummaryCard: View {
 // MARK: --- WIDOK POMOCNICZY ---
 struct LogEntryRow: View {
     let entry: WaterEntry 
+    let waterColor: Color
+    
+    private var selection: HydrationDrinkSelection {
+        HydrationDrinkCatalog.selection(for: entry)
+    }
     
     var body: some View {
         HStack {
-            Image(systemName: "plus.circle.fill")
-                .foregroundStyle(Color.glindaPink)
+            Image(systemName: selection.iconName)
+                .foregroundStyle(selection.type == .water ? waterColor : selection.liquidColor)
             
-            Text("\(Int(entry.amountMl)) ml")
-                .font(.headline)
-                .foregroundStyle(.white)
+            VStack(alignment: .leading, spacing: 2) {
+                selection.localizedName
+                    .font(.headline)
+                    .foregroundStyle(.white)
+                
+                Text(AppLocalization.key("\(Int(entry.amountMl)) ml logged"))
+                    .font(.caption)
+                    .foregroundStyle(.white.opacity(0.7))
+            }
             
             Spacer()
             

@@ -24,6 +24,7 @@ class StorageManager {
         case invalidImageFormat
         case missingAuthToken
         case missingUserId
+        case ownershipMismatch
     }
 
     func uploadImage(image: UIImage, path: String) async throws -> String {
@@ -32,7 +33,9 @@ class StorageManager {
         }
         
         let imageRef = storage().reference().child(path)
-        let _ = try await imageRef.putDataAsync(data)
+        let metadata = StorageMetadata()
+        metadata.contentType = "image/jpeg"
+        let _ = try await imageRef.putDataAsync(data, metadata: metadata)
         let url = try await imageRef.downloadURL()
         
         return url.absoluteString
@@ -48,7 +51,6 @@ class StorageManager {
     func deleteImage(from urlString: String) async throws {
         // Zabezpieczenie przed niepoprawnym URL
         guard URL(string: urlString) != nil else {
-            print("StorageManager.deleteImage: Invalid URL string, skipping deletion.")
             return
         }
         
@@ -56,28 +58,42 @@ class StorageManager {
         
         do {
             try await storageRef.delete()
-            print("StorageManager.deleteImage: Successfully deleted file at \(urlString)")
         } catch let error as NSError where error.code == StorageErrorCode.objectNotFound.rawValue {
             print("StorageManager.deleteImage: File not found (expected).")
         } catch {
-            print("StorageManager.deleteImage: Error deleting file at \(urlString): \(error.localizedDescription)")
             throw error
+        }
+    }
+
+    /// Deletes only the recipe's owner-scoped, deterministic image path.
+    func deleteRecipeImage(userId: String, recipeId: String) async throws {
+        guard Auth.auth().currentUser?.uid == userId else {
+            throw StorageError.ownershipMismatch
+        }
+
+        let imageRef = storage().reference()
+            .child("user_recipes/\(userId)/\(recipeId).jpg")
+        do {
+            try await imageRef.delete()
+        } catch let error as NSError where error.code == StorageErrorCode.objectNotFound.rawValue {
+            // A recipe without an uploaded image is already clean.
         }
     }
     
     /// Usuwa zdjęcie profilowe użytkownika na podstawie jego userId.
     func deleteProfileImage(userId: String) async throws {
+        guard Auth.auth().currentUser?.uid == userId else {
+            throw StorageError.ownershipMismatch
+        }
+
         let path = "users/\(userId)/profile.jpg"
         let profileRef = storage().reference().child(path)
         
         do {
             try await profileRef.delete()
-            print("StorageManager: Profile image for \(userId) deleted successfully.")
         } catch let error as NSError where error.code == StorageErrorCode.objectNotFound.rawValue {
             // Ignorujemy błąd, jeśli plik profilowy nie istnieje
-            print("StorageManager: Profile image not found (expected).")
         } catch {
-            print("StorageManager: Could not delete profile image for \(userId): \(error.localizedDescription)")
             throw error
         }
     }

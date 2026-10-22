@@ -93,6 +93,28 @@ class ShoppingListManager {
         saveShoppingList()
     }
     
+    func clearAll() {
+        shoppingList = []
+        currentStartDate = nil
+        currentEndDate = nil
+        saveShoppingList()
+    }
+
+    static func normalizedIngredientKey(for rawName: String) -> String {
+        rawName
+            .folding(options: [.diacriticInsensitive, .widthInsensitive], locale: .current)
+            .lowercased()
+            .replacingOccurrences(of: "[^\\p{L}0-9\\s]", with: " ", options: .regularExpression)
+            .replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    static func cleanedIngredientName(_ rawName: String) -> String {
+        rawName
+            .replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+    
     static func generateList(from entries: [MealPlanEntry], allRecipes: [Recipe]) -> [ShoppingListItem] {
         var aggregatedIngredients: [String: ShoppingListItem] = [:]
         
@@ -103,28 +125,24 @@ class ShoppingListManager {
         
         for entry in entries {
             guard let recipe = recipeMap[entry.recipeId], recipe.servings > 0 else { continue }
-            
-            let multiplier = Double(entry.plannedServings) / Double(recipe.servings)
+
             let sourceName = recipe.name
             
             for ingredient in recipe.ingredients {
-                let requiredQuantity = ingredient.quantity * multiplier
-                
-                let nameKey = ingredient.name.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
-                let unitKey = ingredient.unit.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
-                let key = "\(nameKey)_\(unitKey)"
+                let cleanedName = cleanedIngredientName(ingredient.name)
+                let key = normalizedIngredientKey(for: cleanedName)
+                guard !key.isEmpty else { continue }
                 
                 if var existingItem = aggregatedIngredients[key] {
-                    existingItem.quantity += requiredQuantity
                     if !(existingItem.recipeSources?.contains(sourceName) ?? false) {
                         existingItem.recipeSources = (existingItem.recipeSources ?? []) + [sourceName]
                     }
                     aggregatedIngredients[key] = existingItem
                 } else {
                     aggregatedIngredients[key] = ShoppingListItem(
-                        name: ingredient.name.trimmingCharacters(in: .whitespacesAndNewlines),
-                        quantity: requiredQuantity,
-                        unit: ingredient.unit.trimmingCharacters(in: .whitespacesAndNewlines), 
+                        name: cleanedName,
+                        quantity: 0,
+                        unit: "",
                         isCompleted: false,
                         isManuallyAdded: false,
                         recipeSources: [sourceName]

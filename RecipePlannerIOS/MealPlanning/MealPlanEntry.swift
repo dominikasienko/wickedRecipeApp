@@ -7,6 +7,7 @@
 
 import Foundation
 import FirebaseFirestore
+import SwiftUI
 
 struct MealPlanEntry: Codable, Identifiable {
     @DocumentID var id: String?
@@ -17,6 +18,14 @@ struct MealPlanEntry: Codable, Identifiable {
     var recipeName: String
     
     var plannedServings: Int
+
+    var canonicalMealType: String {
+        AppOptionCatalog.canonicalValue(for: mealType, in: AppOptionCatalog.mealTypes)
+    }
+
+    var localizedMealType: LocalizedStringKey {
+        AppOptionCatalog.localizedTitle(for: mealType, in: AppOptionCatalog.mealTypes)
+    }
     
     init(userId: String, date: Date, mealType: String, recipeId: String, recipeName: String, plannedServings: Int) {
         self.userId = userId
@@ -47,4 +56,3 @@ extension Date {
         Calendar.current.isDate(self, inSameDayAs: otherDate)
     }
 }
-

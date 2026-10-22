@@ -19,6 +19,11 @@ struct ShoppingListItem: Identifiable, Hashable, Codable {
     
     var recipeSources: [String]?
     var description: String {
+        let trimmedUnit = unit.trimmingCharacters(in: .whitespacesAndNewlines)
+        if quantity <= 0 || trimmedUnit.isEmpty {
+            return name
+        }
+
         let formattedQuantity = quantity.truncatingRemainder(dividingBy: 1) == 0 ? "\(Int(quantity))" : String(format: "%.2f", quantity)
         
         if isManuallyAdded && quantity == 1 && unit.lowercased() == "piece" {

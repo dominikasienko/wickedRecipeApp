@@ -14,6 +14,7 @@ enum TabItem: String, CaseIterable {
     case home = "Home"
     case favorites = "Favorites"
     case calendar = "Calendar"
+    case seasonal = "Seasonal"
     case water = "Water tracker"
     case profile = "Profile"
     case settings = "Settings"
@@ -23,9 +24,22 @@ enum TabItem: String, CaseIterable {
         case .home: return "house.fill"
         case .favorites: return "heart.fill"
         case .calendar: return "calendar"
+        case .seasonal: return "leaf.fill"
         case .water: return "drop.fill"
         case .profile: return "person.crop.circle.fill"
         case .settings: return "gear"
+        }
+    }
+
+    var localizedTitle: LocalizedStringKey {
+        switch self {
+        case .home: return "Home"
+        case .favorites: return "Favorites"
+        case .calendar: return "Calendar"
+        case .seasonal: return "Seasonal"
+        case .water: return "Water tracker"
+        case .profile: return "Profile"
+        case .settings: return "Settings"
         }
     }
 }
@@ -39,22 +53,15 @@ struct AppTabView: View {
     
     @State private var selectedTab: TabItem = .home
     
-    private var localizedTabNames: [String] {
-        return [
-            String(localized: "Home"),
-            String(localized: "Favorites"),
-            String(localized: "Calendar"),
-            String(localized: "Water tracker"),
-            String(localized: "Profile"),
-            String(localized: "Settings"),
-        ]
-    }
-    
 // MARK: - Main
     var body: some View {
-        VStack(spacing: 0) {
-            tabContent
-            customTabBar
+        GeometryReader { proxy in
+            VStack(spacing: 0) {
+                tabContent
+                customTabBar(bottomInset: proxy.safeAreaInsets.bottom)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .ignoresSafeArea(.container, edges: .bottom)
         }
         .ignoresSafeArea(.keyboard, edges: .bottom)
         .preferredColorScheme(.dark)
@@ -68,45 +75,40 @@ struct AppTabView: View {
             case .home:
                 NavigationStack { HomeView() }
             case .favorites:
-                NavigationStack { FavoritesView() }
+                FavoritesView()
             case .calendar:
-                NavigationStack { MealPlannerView() }
+                MealPlannerView()
+            case .seasonal:
+                NavigationStack { SeasonalCalendarView() }
             case .water:
-                NavigationStack { WaterTrackerView() }
+                WaterTrackerView()
             case .profile:
-                NavigationStack { ProfileView() }
+                ProfileView()
             case .settings:
-                NavigationStack { SettingsView() }
+                SettingsView()
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
     
-    private var customTabBar: some View {
-        VStack(spacing: 0) {
+    private func customTabBar(bottomInset: CGFloat) -> some View {
+        let iconBottomPadding = bottomInset > 0 ? max(bottomInset - 22, 6) : 8
+
+        return VStack(spacing: 0) {
             Divider()
                 .background(Color.white.opacity(0.2))
-            
+
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(alignment: .top, spacing: 20) {
                     ForEach(TabItem.allCases, id: \.self) { tab in
-                        let tabName: String = {
-                            if let index = TabItem.allCases.firstIndex(of: tab),
-                               index < localizedTabNames.count {
-                                return localizedTabNames[index]
-                            }
-                            
-                            return tab.rawValue
-                        }()
-                        
                         Button {
                             selectedTab = tab
                         } label: {
                             VStack(spacing: 4) {
                                 Image(systemName: tab.iconName)
                                     .font(.system(size: 22))
-                                
-                                Text(tabName)
+
+                                Text(tab.localizedTitle)
                                     .font(.system(size: 10))
                             }
                             .foregroundStyle(selectedTab == tab ? Color.glindaPink : .gray)
@@ -119,6 +121,8 @@ struct AppTabView: View {
             }
             .frame(height: 50)
         }
-        .background(Color.darkBackground.opacity(0.8).background(.ultraThinMaterial))
+        .padding(.bottom, iconBottomPadding)
+        .background(.ultraThinMaterial)
+        .background(Color.darkBackground.opacity(0.88))
     }
 }

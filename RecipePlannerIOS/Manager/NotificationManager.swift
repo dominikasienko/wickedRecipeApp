@@ -12,24 +12,60 @@ import UserNotifications
 @Observable
 class NotificationManager {
     
-    func toggleWaterReminders(isOn: Bool) {
+    func toggleWaterReminders(isOn: Bool, locale: Locale = .autoupdatingCurrent) {
+        toggleWaterReminders(
+            isOn: isOn,
+            intervalHours: 4,
+            quietHoursEnabled: false,
+            quietStartHour: 22,
+            quietEndHour: 7,
+            locale: locale
+        )
+    }
+    
+    func toggleWaterReminders(
+        isOn: Bool,
+        intervalHours: Int,
+        quietHoursEnabled: Bool,
+        quietStartHour: Int,
+        quietEndHour: Int,
+        locale: Locale = .autoupdatingCurrent
+    ) {
         if isOn {
             Task {
-                await requestAndScheduleReminders()
+                await requestAndScheduleReminders(
+                    intervalHours: intervalHours,
+                    quietHoursEnabled: quietHoursEnabled,
+                    quietStartHour: quietStartHour,
+                    quietEndHour: quietEndHour,
+                    locale: locale
+                )
             }
         } else {
             cancelWaterReminders()
         }
     }
     
-    private func requestAndScheduleReminders() async {
+    private func requestAndScheduleReminders(
+        intervalHours: Int,
+        quietHoursEnabled: Bool,
+        quietStartHour: Int,
+        quietEndHour: Int,
+        locale: Locale
+    ) async {
         let center = UNUserNotificationCenter.current()
         do {
             let granted = try await center.requestAuthorization(options: [.alert, .sound, .badge])
             
             if granted {
                 print("Notification permission granted.")
-                scheduleWaterReminders()
+                scheduleWaterReminders(
+                    intervalHours: intervalHours,
+                    quietHoursEnabled: quietHoursEnabled,
+                    quietStartHour: quietStartHour,
+                    quietEndHour: quietEndHour,
+                    locale: locale
+                )
             } else {
                 print("Notification permission denied.")
             }
@@ -38,32 +74,95 @@ class NotificationManager {
         }
     }
     
-    private func scheduleWaterReminders() {
+    private func scheduleWaterReminders(
+        intervalHours: Int,
+        quietHoursEnabled: Bool,
+        quietStartHour: Int,
+        quietEndHour: Int,
+        locale: Locale
+    ) {
         let center = UNUserNotificationCenter.current()
         
-        center.removePendingNotificationRequests(withIdentifiers: ["waterReminder"])
-        
-        let content = UNMutableNotificationContent()
-        content.title = "Time to Hydrate!"
-        content.body = "Don't forget to log your water intake and fill up your character!"
-        content.sound = .default
-        
-        let trigger = UNTimeIntervalNotificationTrigger(timeInterval: 14400, repeats: true)
-        
-        let request = UNNotificationRequest(identifier: "waterReminder", content: content, trigger: trigger)
-        
-        center.add(request) { error in
-            if let error = error {
-                print("Error scheduling notification: \(error.localizedDescription)")
-            } else {
-                print("Water reminder scheduled successfully.")
+        center.getPendingNotificationRequests { requests in
+            let existingIDs = requests
+                .map { $0.identifier }
+                .filter { $0.hasPrefix("waterReminder") }
+            center.removePendingNotificationRequests(withIdentifiers: existingIDs)
+            
+            let safeInterval = max(1, min(intervalHours, 23))
+            var allowedHours: [Int] = []
+            
+            for hour in stride(from: 0, through: 23, by: safeInterval) {
+                if quietHoursEnabled && self.isHour(hour, inQuietRangeFrom: quietStartHour, to: quietEndHour) {
+                    continue
+                }
+                allowedHours.append(hour)
             }
+            
+            if allowedHours.isEmpty {
+                allowedHours = [12]
+            }
+            
+            for hour in allowedHours {
+                let content = UNMutableNotificationContent()
+                content.title = String(localized: "Time to Hydrate!", locale: locale)
+                content.body = String(
+                    localized: "Don't forget to log your drinks and hydration progress.",
+                    locale: locale
+                )
+                content.sound = .default
+                
+                var components = DateComponents()
+                components.hour = hour
+                components.minute = 0
+                
+                let trigger = UNCalendarNotificationTrigger(dateMatching: components, repeats: true)
+                let identifier = "waterReminder-\(hour)"
+                let request = UNNotificationRequest(identifier: identifier, content: content, trigger: trigger)
+                
+                center.add(request) { error in
+                    if let error = error {
+                        print("Error scheduling notification \(identifier): \(error.localizedDescription)")
+                    }
+                }
+            }
+            
+            print("Water reminders scheduled for hours: \(allowedHours)")
         }
     }
     
-    private func cancelWaterReminders() {
+    func cancelAllWaterReminders() {
         let center = UNUserNotificationCenter.current()
-        center.removePendingNotificationRequests(withIdentifiers: ["waterReminder"])
-        print("Water reminders cancelled.")
+        center.getPendingNotificationRequests { requests in
+            let ids = requests
+                .map { $0.identifier }
+                .filter { $0.hasPrefix("waterReminder") }
+            center.removePendingNotificationRequests(withIdentifiers: ids)
+        }
+        center.getDeliveredNotifications { notifications in
+            let ids = notifications
+                .map { $0.request.identifier }
+                .filter { $0.hasPrefix("waterReminder") }
+            center.removeDeliveredNotifications(withIdentifiers: ids)
+        }
+    }
+
+    func cancelWaterReminders() {
+        cancelAllWaterReminders()
+    }
+    
+    private func isHour(_ hour: Int, inQuietRangeFrom startHour: Int, to endHour: Int) -> Bool {
+        let start = ((startHour % 24) + 24) % 24
+        let end = ((endHour % 24) + 24) % 24
+        
+        if start == end {
+            return true
+        }
+        
+        if start < end {
+            return hour >= start && hour < end
+        }
+        
+        return hour >= start || hour < end
     }
 }

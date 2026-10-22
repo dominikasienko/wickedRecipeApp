@@ -20,85 +20,83 @@ struct FavoritesView: View {
     
     var body: some View {
         NavigationStack {
-            GeometryReader { proxy in
-                let safeAreaInsets = proxy.safeAreaInsets
-                
-                ZStack {
-                    darkBackground.ignoresSafeArea()
-                    RadialGradient(
-                        colors: [wickedGreen.opacity(0.3), .clear],
-                        center: .topLeading,
-                        startRadius: 0,
-                        endRadius: 700
-                    ).ignoresSafeArea()
-                    RadialGradient(
-                        colors: [glindaPink.opacity(0.15), .clear],
-                        center: .bottomTrailing,
-                        startRadius: 0,
-                        endRadius: 500
-                    ).ignoresSafeArea()
+            ZStack {
+                darkBackground.ignoresSafeArea()
+                RadialGradient(
+                    colors: [wickedGreen.opacity(0.3), .clear],
+                    center: .topLeading,
+                    startRadius: 0,
+                    endRadius: 700
+                ).ignoresSafeArea()
+                RadialGradient(
+                    colors: [glindaPink.opacity(0.15), .clear],
+                    center: .bottomTrailing,
+                    startRadius: 0,
+                    endRadius: 500
+                ).ignoresSafeArea()
 
-                    ScrollView {
-                        VStack(spacing: 20) {
-                            if favoriteRecipes.isEmpty {
-                                ContentUnavailableView(
-                                    label: {
-                                        Label {
-                                            Text("No favorite recipes")
-                                                .font(.title3.bold())
-                                        } icon: {
-                                            Image(systemName: "heart.slash.fill")
-                                                .foregroundStyle(glindaPink)
-                                        }
-                                    },
-                                    description: {
-                                        Text("Mark the recipe with a heart on the recipe card to display it here.")
+                ScrollView {
+                    VStack(spacing: 20) {
+                        if favoriteRecipes.isEmpty {
+                            ContentUnavailableView(
+                                label: {
+                                    Label {
+                                        Text("No favorite recipes")
+                                            .font(.title3.bold())
+                                    } icon: {
+                                        Image(systemName: "heart.slash.fill")
+                                            .foregroundStyle(glindaPink)
                                     }
-                                )
-                                .foregroundStyle(.secondary)
-                                .padding(.top, 100)
-                                
-                            } else {
-                                LazyVStack(spacing: 20) {
-                                    ForEach(favoriteRecipes) { recipe in
-                                        NavigationLink {
-                                            RecipeDetailView(recipe: recipe)
-                                        } label: {
-                                            FavoriteRecipeRow(recipe: recipe, glindaPink: glindaPink)
-                                        }
-                                        .buttonStyle(.plain)
-                                    }
+                                },
+                                description: {
+                                    Text("Mark the recipe with a heart on the recipe card to display it here.")
                                 }
-                                .padding(.horizontal)
+                            )
+                            .foregroundStyle(.secondary)
+                            .padding(.top, 56)
+                            
+                        } else {
+                            LazyVStack(spacing: 20) {
+                                ForEach(favoriteRecipes) { recipe in
+                                    NavigationLink {
+                                        RecipeDetailView(recipe: recipe)
+                                    } label: {
+                                        FavoriteRecipeRow(recipe: recipe, glindaPink: glindaPink)
+                                    }
+                                    .buttonStyle(.plain)
+                                }
                             }
+                            .padding(.horizontal)
                         }
-                        .padding(.top, safeAreaInsets.top + 80)
-                        .padding(.bottom, 20)
                     }
-                    .edgesIgnoringSafeArea(.top)
-
-                    VStack(spacing: 0) {
-                        HStack {
-                            Text("Favorites")
-                                .font(.system(.largeTitle, design: .serif))
-                                .fontWeight(.bold)
-                                .foregroundStyle(wickedGreen)
-                            Spacer()
-                        }
-                        .padding(.horizontal)
-                        .padding(.bottom, 12)
-                        .padding(.top, safeAreaInsets.top + 10)
-                    }
-                    .background(.ultraThinMaterial)
-                    .overlay(Rectangle().frame(height: 1).foregroundStyle(Color.white.opacity(0.2)), alignment: .bottom)
-                    .frame(maxHeight: .infinity, alignment: .top)
-                    .edgesIgnoringSafeArea(.top)
-                    
+                    .padding(.top, 14)
+                    .padding(.bottom, 24)
                 }
-                .navigationBarHidden(true)
-                .preferredColorScheme(.dark)
+                .safeAreaInset(edge: .top, spacing: 0) {
+                    favoritesTopBar
+                }
             }
+            .navigationBarHidden(true)
         }
+    }
+
+    private var favoritesTopBar: some View {
+        HStack {
+            Text(AppLocalization.key( "Favorites"))
+                .font(.system(.largeTitle, design: .rounded))
+                .fontWeight(.bold)
+                .foregroundStyle(wickedGreen)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+            Spacer()
+        }
+        .padding(.horizontal)
+        .padding(.vertical, 10)
+        .background(.ultraThinMaterial)
+        .overlay(
+            Rectangle().frame(height: 1).foregroundStyle(Color.white.opacity(0.2)),
+            alignment: .bottom
+        )
     }
 }
 
@@ -131,10 +129,18 @@ struct FavoriteRecipeRow: View {
                     .fontWeight(.bold)
                     .foregroundStyle(.white)
                     .shadow(radius: 2)
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.82)
                 
-                Text(recipe.category.uppercased())
+                Text(LocalizedStringKey(
+                    AppOptionCatalog.localizationKey(for: recipe.category, in: AppOptionCatalog.recipeCategories)
+                        ?? recipe.category
+                ))
+                    .textCase(.uppercase)
                     .font(.caption.bold())
                     .foregroundStyle(glindaPink)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.82)
                     .padding(.vertical, 4)
                     .padding(.horizontal, 8)
                     .background(glindaPink.opacity(0.2))
@@ -146,6 +152,7 @@ struct FavoriteRecipeRow: View {
                 }
                 .font(.footnote)
                 .foregroundStyle(.white.opacity(0.8))
+                .lineLimit(1)
             }
             .padding()
         }

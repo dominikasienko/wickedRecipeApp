@@ -57,9 +57,9 @@ class MealPlannerManager {
             
             let sortedEntries = fetchedEntries.sorted { entry1, entry2 in
                 if entry1.date.isSameDay(as: entry2.date) {
-                    let mealOrder = Constants.mealTypes
-                    let firstIndex = mealOrder.firstIndex(of: entry1.mealType) ?? 0
-                    let secondIndex = mealOrder.firstIndex(of: entry2.mealType) ?? 0
+                    let mealOrder = AppOptionCatalog.mealTypes.map(\.id)
+                    let firstIndex = mealOrder.firstIndex(of: entry1.canonicalMealType) ?? 0
+                    let secondIndex = mealOrder.firstIndex(of: entry2.canonicalMealType) ?? 0
                     return firstIndex < secondIndex
                 }
                 return entry1.date.timeIntervalSinceReferenceDate < entry2.date.timeIntervalSinceReferenceDate
@@ -87,6 +87,27 @@ class MealPlannerManager {
             .delete()
     }
     
+    /// Usuwa wszystkie wpisy planu posiłków użytkownika.
+    func deleteAllMealPlanEntries() async throws {
+        guard Auth.auth().currentUser?.uid == userId else {
+            throw NSError(domain: "MealPlannerManagerError", code: 403)
+        }
+
+        let collectionRef = db.collection("users").document(userId)
+            .collection("mealPlan")
+        let snapshot = try await collectionRef.getDocuments()
+
+        for start in stride(from: 0, to: snapshot.documents.count, by: 450) {
+            let batch = db.batch()
+            for document in snapshot.documents[start..<min(start + 450, snapshot.documents.count)] {
+                batch.deleteDocument(document.reference)
+            }
+            try await batch.commit()
+        }
+
+        await MainActor.run { self.allMealPlanEntries = [] }
+    }
+    
     /// Pomocnicza funkcja do filtrowania posiłków na dany dzień
     func entriesForDay(_ date: Date) -> [MealPlanEntry] {
         return allMealPlanEntries.filter { $0.date.isSameDay(as: date) }
@@ -96,5 +117,10 @@ class MealPlannerManager {
         listenerRegistration?.remove()
         listenerRegistration = nil
         print("MealPlannerManager: Monitoring has been suspended.")
+    }
+
+    func clearLocalData() {
+        stopListening()
+        allMealPlanEntries = []
     }
 }

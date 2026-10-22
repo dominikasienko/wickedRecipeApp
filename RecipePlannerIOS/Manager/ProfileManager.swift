@@ -10,6 +10,27 @@ import Observation
 import FirebaseAuth
 import FirebaseFirestore
 
+private enum ProfileWriteError: Error {
+    case timedOut
+}
+
+private final class ProfileWriteContinuation: @unchecked Sendable {
+    private let lock = NSLock()
+    private var continuation: CheckedContinuation<Void, Error>?
+
+    init(_ continuation: CheckedContinuation<Void, Error>) {
+        self.continuation = continuation
+    }
+
+    func complete(_ result: Result<Void, Error>) {
+        lock.lock()
+        let continuation = self.continuation
+        self.continuation = nil
+        lock.unlock()
+        continuation?.resume(with: result)
+    }
+}
+
 @Observable
 class ProfileManager {
     private func db() -> Firestore {
@@ -22,6 +43,7 @@ class ProfileManager {
         }
     
     var userProfile: UserProfile?
+    private(set) var didCreateDefaultProfile = false
 
 // MARK:  --- UTWORZENIE DOMYŚLNEGO PROFILU ---
     private func createDefaultProfile(userId: String) -> UserProfile {
@@ -33,35 +55,36 @@ class ProfileManager {
             dateOfBirth: Date(),
             weight: 70.0,
             height: 170.0,
-            gender: "Undefined",
-            activityLevel: "Moderate activity",
+            gender: "other",
+            activityLevel: "",
             selectedDiets: [],
-            profileImageURL: nil
+            weightGoal: nil,
+            profileImageURL: nil,
+            canUseGeneralEstimates: false
         )
     }
     
     /// Zapisuje dane profilowe użytkownika do Firestore.
     func saveUserProfile(profile: UserProfile, uid: String) async throws {
-        print("ProfileManager.saveUserProfile: Saving profile for uid=\(uid)")
-        
         let collectionRef = db().collection("users")
+        let normalizedProfile = profile.canonicalizedForStorage()
+        let document = collectionRef.document(uid)
         
         do {
-            try collectionRef.document(uid).setData(from: profile)
+            try await writeProfile(normalizedProfile, to: document)
             await MainActor.run {
-                self.userProfile = profile
+                self.userProfile = normalizedProfile
+                self.didCreateDefaultProfile = false
             }
-            print("ProfileManager.saveUserProfile: Profile saved successfully.")
         } catch {
-            print("ProfileManager.saveUserProfile: Failed to save profile for uid=\(uid): \(error.localizedDescription)")
+            print("ProfileManager: Profile save failed.")
             throw error
         }
     }
     
     /// Pobiera profil użytkownika z Firestore. Jeśli profil nie istnieje, tworzy domyślny.
     func fetchUserProfile(userId: String) async throws {
-        print("ProfileManager.fetchUserProfile: Fetching profile for uid=\(userId)")
-        
+        await MainActor.run { self.didCreateDefaultProfile = false }
         let docRef = db().collection("users").document(userId)
         let document = try await docRef.getDocument()
 
@@ -71,43 +94,69 @@ class ProfileManager {
                 await MainActor.run {
                     self.userProfile = profile
                 }
-                print("ProfileManager.fetchUserProfile: Loaded profile for uid=\(userId)")
             } catch {
-                print("ProfileManager.fetchUserProfile: Mapping error for uid=\(userId): \(error)")
+                print("ProfileManager: Profile data could not be read.")
                 throw NSError(domain: "ProfileError", code: 1, userInfo: [NSLocalizedDescriptionKey: "Profile data mapping error. Verify that the UserProfile model matches the Firestore data."])
             }
         } else {
-            print("ProfileManager.fetchUserProfile: No document for uid=\(userId). Creating default profile.")
-            
             let defaultProfile = createDefaultProfile(userId: userId)
             do {
-                try docRef.setData(from: defaultProfile)
+                try await writeProfile(defaultProfile, to: docRef)
             } catch {
-                print("ProfileManager.fetchUserProfile: Failed to save default profile for uid=\(userId): \(error.localizedDescription)")
+                print("ProfileManager: Default profile creation failed.")
                 throw error
             }
 
             await MainActor.run {
                 self.userProfile = defaultProfile
+                self.didCreateDefaultProfile = true
             }
-            print("ProfileManager.fetchUserProfile: Default profile created for uid=\(userId)")
         }
     }
     
-    /// Usuwa dokument profilu użytkownika z kolekcji 'users'.
+        /// Usuwa dokument profilu użytkownika z kolekcji 'users'.
         func deleteUserProfile(userId: String) async throws {
+            guard Auth.auth().currentUser?.uid == userId else {
+                throw NSError(domain: "ProfileError", code: 403)
+            }
+
             let db = getFirestoreInstance()
             let docRef = db.collection("users").document(userId)
             
             do {
                 try await docRef.delete()
-                print("ProfileManager: User profile \(userId) deleted successfully from Firestore.")
-                await MainActor.run {
-                    self.userProfile = nil
-                }
             } catch {
-                print("ProfileManager: Error deleting user profile \(userId): \(error.localizedDescription)")
+                print("ProfileManager: Profile removal failed.")
                 throw error
             }
         }
+
+    func clearLocalData() {
+        userProfile = nil
+        didCreateDefaultProfile = false
+    }
+
+    private func writeProfile(_ profile: UserProfile, to document: DocumentReference) async throws {
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+            let result = ProfileWriteContinuation(continuation)
+            let timeout = DispatchWorkItem {
+                result.complete(.failure(ProfileWriteError.timedOut))
+            }
+            DispatchQueue.global().asyncAfter(deadline: .now() + 30, execute: timeout)
+
+            do {
+                try document.setData(from: profile) { error in
+                    timeout.cancel()
+                    if let error {
+                        result.complete(.failure(error))
+                    } else {
+                        result.complete(.success(()))
+                    }
+                }
+            } catch {
+                timeout.cancel()
+                result.complete(.failure(error))
+            }
+        }
+    }
 }

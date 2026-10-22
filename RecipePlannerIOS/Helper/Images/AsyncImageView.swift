@@ -50,7 +50,7 @@ struct AsyncImageView: View {
                 self.isLoading = false
             }
         } catch {
-            print("Error loading image from URL: \(error.localizedDescription)")
+            print("AsyncImageView: Image request failed.")
             await MainActor.run {
                 self.isLoading = false
             }

@@ -11,6 +11,8 @@ struct ShoppingListView: View {
     @Environment(MealPlannerManager.self) private var mealPlannerManager
     @Environment(RecipeManager.self) private var recipeManager
     @Environment(ShoppingListManager.self) private var shoppingListManager
+    @AppStorage("shoppingIncludeManualItems") private var shoppingIncludeManualItems: Bool = true
+    @AppStorage("shoppingPreserveCompletedState") private var shoppingPreserveCompletedState: Bool = true
     
     @State private var startDate: Date = Date().startOfDay
     @State private var endDate: Date = Calendar.current.date(byAdding: .day, value: 7, to: Date().startOfDay) ?? Date()
@@ -147,9 +149,7 @@ struct ShoppingListView: View {
                     addManualItem(name: name)
                 }
                 .presentationDetents([.height(200)])
-                .preferredColorScheme(.dark)
             }
-            .preferredColorScheme(.dark)
             .onAppear {
                 if endDate < startDate {
                     endDate = startDate
@@ -163,12 +163,16 @@ struct ShoppingListView: View {
     func generateShoppingList() {
         let currentList = shoppingListManager.shoppingList
         
-        let completionMap: [String: Bool] = Dictionary(uniqueKeysWithValues: currentList.map { item in
-            let key = "\(item.name.lowercased().trimmingCharacters(in: .whitespacesAndNewlines))-\(item.unit.lowercased().trimmingCharacters(in: .whitespacesAndNewlines))"
-            return (key, item.isCompleted)
-        })
+        var completionMap: [String: Bool] = [:]
+        if shoppingPreserveCompletedState {
+            for item in currentList {
+                let key = ShoppingListManager.normalizedIngredientKey(for: item.name)
+                guard !key.isEmpty else { continue }
+                completionMap[key] = (completionMap[key] ?? false) || item.isCompleted
+            }
+        }
         
-        let manualItems = currentList.filter { $0.isManuallyAdded }
+        let manualItems = shoppingIncludeManualItems ? currentList.filter { $0.isManuallyAdded } : []
         
         let filteredEntries = mealPlannerManager.allMealPlanEntries.filter { entry in
             return entry.date.startOfDay >= startDate && entry.date.startOfDay <= endDate
@@ -184,13 +188,15 @@ struct ShoppingListView: View {
         let allRecipes = recipeManager.userRecipes
         var generatedItems = ShoppingListManager.generateList(from: filteredEntries, allRecipes: allRecipes)
         
-        generatedItems = generatedItems.map { item in
-            var updatedItem = item
-            let key = "\(item.name.lowercased().trimmingCharacters(in: .whitespacesAndNewlines))-\(item.unit.lowercased().trimmingCharacters(in: .whitespacesAndNewlines))"
-            if let isCompleted = completionMap[key] {
-                updatedItem.isCompleted = isCompleted
+        if shoppingPreserveCompletedState {
+            generatedItems = generatedItems.map { item in
+                var updatedItem = item
+                let key = ShoppingListManager.normalizedIngredientKey(for: item.name)
+                if let isCompleted = completionMap[key] {
+                    updatedItem.isCompleted = isCompleted
+                }
+                return updatedItem
             }
-            return updatedItem
         }
         
         let combinedItems = generatedItems + manualItems
@@ -207,12 +213,10 @@ struct ShoppingListView: View {
         var aggregatedDict = [String: ShoppingListItem]()
         
         for item in items {
-            let nameKey = item.name.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
-            let unitKey = item.unit.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
-            let key = "\(nameKey)-\(unitKey)"
+            let key = ShoppingListManager.normalizedIngredientKey(for: item.name)
+            guard !key.isEmpty else { continue }
             
             if var existingItem = aggregatedDict[key] {
-                existingItem.quantity += item.quantity
                 existingItem.isCompleted = existingItem.isCompleted || item.isCompleted
                 existingItem.isManuallyAdded = existingItem.isManuallyAdded || item.isManuallyAdded
                 
@@ -225,8 +229,9 @@ struct ShoppingListView: View {
                 aggregatedDict[key] = existingItem
             } else {
                 var cleanItem = item
-                cleanItem.name = nameKey.capitalized
-                cleanItem.unit = unitKey
+                cleanItem.name = ShoppingListManager.cleanedIngredientName(item.name)
+                cleanItem.quantity = 0
+                cleanItem.unit = ""
                 aggregatedDict[key] = cleanItem
             }
         }
@@ -239,8 +244,8 @@ struct ShoppingListView: View {
         
         let newItem = ShoppingListItem(
             name: name,
-            quantity: 1,
-            unit: "piece",
+            quantity: 0,
+            unit: "",
             isCompleted: false,
             isManuallyAdded: true,
             recipeSources: nil
@@ -261,20 +266,17 @@ struct ShoppingListView: View {
 struct PlanningPeriodDisplay: View {
     @Bindable var manager: ShoppingListManager
     
-    private static let dateFormatter: DateFormatter = {
-        let formatter = DateFormatter()
-        formatter.dateStyle = .medium
-        formatter.timeStyle = .none
-        return formatter
-    }()
-    
     var body: some View {
         Group {
             if let start = manager.currentStartDate, let end = manager.currentEndDate {
                 HStack(spacing: 4) {
                     Text("Generated for:")
                         .font(.caption)
-                    Text("\(start, formatter: Self.dateFormatter) - \(end, formatter: Self.dateFormatter)")
+                    HStack(spacing: 0) {
+                        Text(start, format: .dateTime.month(.abbreviated).day())
+                        Text(verbatim: " - ")
+                        Text(end, format: .dateTime.month(.abbreviated).day())
+                    }
                         .font(.callout).bold()
                 }
                 .foregroundStyle(.gray)
@@ -304,7 +306,7 @@ extension UIApplication {
 }
 
 struct ShoppingListSection: View {
-    let title: String
+    let title: LocalizedStringKey
     let items: [ShoppingListItem]
     let onToggle: (ShoppingListItem) -> Void
     let onDelete: (ShoppingListItem) -> Void
@@ -347,7 +349,7 @@ struct ShoppingListRow: View {
             .buttonStyle(.plain)
             
             VStack(alignment: .leading, spacing: 2) {
-                Text(item.description)
+                Text(item.name)
                     .strikethrough(item.isCompleted, color: .gray)
                     .foregroundStyle(item.isCompleted ? .gray : .white)
                     .font(.headline)

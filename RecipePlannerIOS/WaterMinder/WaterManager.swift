@@ -27,22 +27,14 @@ class WaterManager {
         listenerRegistration?.remove()
     }
 
-    /// Oblicza i ustawia cel dzienny, a następnie aktualizuje bieżące spożycie na podstawie aktualnego rekordu.
-    func calculateGoal(weightKg: Double, activityLevel: String) {
-        var calculatedGoal = weightKg * 30
-        
-        if activityLevel.contains("High activity") || activityLevel.contains("Very high activity") {
-            calculatedGoal *= 1.2
-        } else if activityLevel.contains("Low activity") {
-            calculatedGoal *= 0.9
-        }
-        
-        let finalGoal = (calculatedGoal / 50.0).rounded() * 50.0
-        let currentIntake = todayRecord?.totalIntakeML ?? 0.0
+    /// Sets the EFSA total-water reference when the profile can use general estimates.
+    func calculateGoal(profile: UserProfile) {
+        let reference = profile.calculateWaterGoalMl()
+        let currentVolume = todayRecord?.totalVolumeML ?? 0.0
         
         self.goal = WaterGoal(
-            dailyGoalMl: finalGoal,
-            currentIntakeMl: currentIntake
+            dailyGoalMl: reference,
+            currentBeverageVolumeMl: currentVolume
         )
     }
     
@@ -74,7 +66,7 @@ class WaterManager {
                 DispatchQueue.main.async {
                     self.todayRecord = record
                     if self.goal != nil {
-                        self.goal?.currentIntakeMl = record.totalIntakeML
+                        self.goal?.currentBeverageVolumeMl = record.totalVolumeML
                     }
                     self.updateOrAddRecord(record)
                 }
@@ -84,14 +76,10 @@ class WaterManager {
                     self.todayRecord = emptyRecord
                     
                     if self.goal != nil {
-                        self.goal?.currentIntakeMl = 0.0
+                        self.goal?.currentBeverageVolumeMl = 0.0
                     }
                     
-                    guard let emptyRecordID = emptyRecord.id else {
-                        print("Warning: Empty record was created without an ID. Cannot remove from allRecords.")
-                        return
-                    }
-                    self.removeRecord(id: emptyRecordID)
+                    self.removeRecord(id: todayKey)
                 }
             }
         }
@@ -124,29 +112,51 @@ class WaterManager {
     }
 
 // MARK: --- LOGIKA FIRESTORE: AKCJE ---
-    func addLog(amountMl: Double) async throws {
+    func addLog(amountMl: Double, beverage: HydrationDrinkSelection) async throws {
         guard let currentRecord = self.todayRecord else {
             print("No record to log for today.")
             throw NSError(domain: "WaterManagerError", code: 2, userInfo: [NSLocalizedDescriptionKey: "Error: No WaterRecord loaded."])
         }
+        
+        guard amountMl > 0 else {
+            throw NSError(domain: "WaterManagerError", code: 3, userInfo: [NSLocalizedDescriptionKey: "Drink amount must be greater than zero."])
+        }
 
-        let newEntry = WaterEntry(amountMl: amountMl)
+        let newEntry = WaterEntry(
+            amountMl: amountMl,
+            beverageId: beverage.id,
+            beverageName: beverage.englishName,
+            hydrationFactor: 1.0
+        )
         var updatedRecord = currentRecord
         updatedRecord.entries.append(newEntry)
         
         let todayKey = updatedRecord.id ?? WaterRecord.formattedDate(Date())
+        updatedRecord.id = todayKey
         let docRef = db.collection("users").document(userId)
             .collection("waterRecords")
             .document(todayKey)
         
         try docRef.setData(from: updatedRecord)
+        
+        await MainActor.run {
+            self.todayRecord = updatedRecord
+            self.updateOrAddRecord(updatedRecord)
+            self.refreshGoalTotals(with: updatedRecord)
+        }
+    }
+    
+    func addLog(amountMl: Double) async throws {
+        let water = HydrationDrinkSelection(type: .water, milkChoice: nil)
+        try await addLog(amountMl: amountMl, beverage: water)
     }
     
     func resetTodayIntake() {
         Task {
             do {
                 let todayKey = WaterRecord.formattedDate(Date())
-                let emptyRecord = WaterRecord.empty(userId: self.userId)
+                var emptyRecord = WaterRecord.empty(userId: self.userId)
+                emptyRecord.id = todayKey
                 
                 let docRef = db.collection("users").document(userId)
                     .collection("waterRecords")
@@ -154,6 +164,11 @@ class WaterManager {
                 
                 // Użycie setData z nowym, pustym rekordem.
                 try docRef.setData(from: emptyRecord)
+                await MainActor.run {
+                    self.todayRecord = emptyRecord
+                    self.removeRecord(id: todayKey)
+                    self.refreshGoalTotals(with: emptyRecord)
+                }
                 print("Successfully reset today's water intake.")
                 
             } catch {
@@ -191,28 +206,38 @@ class WaterManager {
     }
     
     func deleteAllWaterRecords() async throws {
-            let collectionRef = db.collection("users").document(userId)
-                .collection("waterRecords")
-            
-            let snapshot = try await collectionRef.getDocuments()
-            guard !snapshot.documents.isEmpty else {
-                print("No water records found to delete.")
-                return
-            }
-            
+        guard Auth.auth().currentUser?.uid == userId else {
+            throw NSError(domain: "WaterManagerError", code: 403)
+        }
+
+        let collectionRef = db.collection("users").document(userId)
+            .collection("waterRecords")
+        let snapshot = try await collectionRef.getDocuments()
+
+        for start in stride(from: 0, to: snapshot.documents.count, by: 450) {
             let batch = db.batch()
-            snapshot.documents.forEach { document in
+            for document in snapshot.documents[start..<min(start + 450, snapshot.documents.count)] {
                 batch.deleteDocument(document.reference)
             }
             try await batch.commit()
-            
-            DispatchQueue.main.async {
-                self.allRecords = []
-                self.todayRecord = WaterRecord.empty(userId: self.userId)
-                if self.goal != nil {
-                    self.goal?.currentIntakeMl = 0
-                }
-                print("Successfully deleted all water history.")
-            }
+        }
+
+        await MainActor.run {
+            self.allRecords = []
+            self.todayRecord = WaterRecord.empty(userId: self.userId)
+            self.goal?.currentBeverageVolumeMl = 0
+        }
+    }
+
+    func clearLocalData() {
+        stopListening()
+        allRecords = []
+        todayRecord = nil
+        goal = nil
+    }
+    
+    private func refreshGoalTotals(with record: WaterRecord) {
+        guard goal != nil else { return }
+        goal?.currentBeverageVolumeMl = record.totalVolumeML
     }
 }

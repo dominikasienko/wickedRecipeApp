@@ -1,5 +1,5 @@
 {
-  "originHash" : "674440f03109e591dc32c9b6d43dcf78d22242c8540a2bb76e27ba267f907c1c",
+  "originHash" : "50faaaa78ac4ecbfd57e21a3bc1de54b453cc352e64c1daec3fbbf0cc32dd5d6",
   "pins" : [
     {
       "identity" : "abseil-cpp-binary",
@@ -17,6 +17,15 @@
       "state" : {
         "revision" : "61b85103a1aeed8218f17c794687781505fbbef5",
         "version" : "11.2.0"
+      }
+    },
+    {
+      "identity" : "barcodeview",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/hrabkin/BarcodeView.git",
+      "state" : {
+        "branch" : "master",
+        "revision" : "1c18b3236db7ac03146981d26a8258b5e62117c8"
       }
     },
     {
@@ -110,6 +119,14 @@
       }
     },
     {
+      "identity" : "openfoodfacts-swift",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/openfoodfacts/openfoodfacts-swift.git",
+      "state" : {
+        "revision" : "6afd98a56098001bdd8863ee5808847413be634d"
+      }
+    },
+    {
       "identity" : "promises",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/google/promises.git",
@@ -143,6 +160,24 @@
       "state" : {
         "revision" : "c169a5744230951031770e27e475ff6eefe51f9d",
         "version" : "1.33.3"
+      }
+    },
+    {
+      "identity" : "tocropviewcontroller",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/TimOliver/TOCropViewController.git",
+      "state" : {
+        "revision" : "d4a6d8100f4b886fdbc8ae399bf144ff3e9afb7e",
+        "version" : "2.8.0"
+      }
+    },
+    {
+      "identity" : "viewinspector",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/nalexn/ViewInspector",
+      "state" : {
+        "revision" : "e9a06346499a3a889165647e3f23f8a7b2609a1c",
+        "version" : "0.10.3"
       }
     }
   ],

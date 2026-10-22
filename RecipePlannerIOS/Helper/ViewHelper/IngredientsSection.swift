@@ -7,6 +7,61 @@
 
 import SwiftUI
 
+private struct IngredientQuantityField: View {
+    @Environment(\.locale) private var locale
+    @Binding var quantity: Double
+    @State private var text: String
+
+    init(quantity: Binding<Double>) {
+        _quantity = quantity
+        _text = State(initialValue: IngredientQuantityField.formatted(quantity.wrappedValue, locale: .autoupdatingCurrent))
+    }
+
+    var body: some View {
+        TextField("Qty", text: $text)
+            .keyboardType(.decimalPad)
+            .multilineTextAlignment(.center)
+            .frame(width: 64)
+            .foregroundStyle(.white)
+            .padding(.vertical, 6)
+            .background(Color.white.opacity(0.1))
+            .cornerRadius(5)
+            .onAppear {
+                text = IngredientQuantityField.formatted(quantity, locale: locale)
+            }
+            .onChange(of: locale.identifier) {
+                text = IngredientQuantityField.formatted(quantity, locale: locale)
+            }
+            .onChange(of: text) { _, newValue in
+                let sanitized = IngredientQuantityFormatter.sanitizedInput(newValue, locale: locale)
+                if sanitized != newValue {
+                    text = sanitized
+                    return
+                }
+
+                if sanitized.isEmpty {
+                    quantity = 0
+                    return
+                }
+
+                if let parsedValue = IngredientQuantityFormatter.parsedInput(sanitized, locale: locale) {
+                    quantity = parsedValue
+                }
+            }
+            .onChange(of: quantity) { _, newValue in
+                guard !text.isEmpty else { return }
+                let formattedValue = IngredientQuantityFormatter.formatted(newValue, locale: locale)
+                if text != formattedValue, IngredientQuantityFormatter.parsedInput(text, locale: locale) != newValue {
+                    text = formattedValue
+                }
+            }
+    }
+
+    private static func formatted(_ value: Double, locale: Locale) -> String {
+        IngredientQuantityFormatter.formatted(value, locale: locale)
+    }
+}
+
 private struct IngredientRowEditor: View {
     @Binding var ingredient: Ingredient
     let units: [String]
@@ -14,14 +69,7 @@ private struct IngredientRowEditor: View {
 
     var body: some View {
         HStack(spacing: 10) {
-            // Quantity
-            TextField("Qty", value: $ingredient.quantity, formatter: NumberFormatter.decimalFormatter)
-                .keyboardType(.decimalPad)
-                .multilineTextAlignment(.center)
-                .frame(width: 50)
-                .foregroundStyle(.white)
-                .background(Color.white.opacity(0.1))
-                .cornerRadius(5)
+            IngredientQuantityField(quantity: $ingredient.quantity)
             
             // Unit Picker
             Picker("Unit", selection: $ingredient.unit) {
@@ -34,8 +82,12 @@ private struct IngredientRowEditor: View {
             .frame(width: 85)
             
             // Name
-            TextField("Ingredient", text: $ingredient.name)
-                .foregroundStyle(.white)
+            NativeTextField(
+                text: $ingredient.name,
+                placeholder: "Ingredient",
+                autocorrectionType: .default,
+                autocapitalizationType: .sentences
+            )
                 .frame(maxWidth: .infinity, alignment: .leading)
             
             // Delete Button
@@ -57,10 +109,9 @@ private struct SectionalIngredientsContent: View {
 
     var body: some View {
         ForEach(sections) { section in
-            let sectionBinding = binding(for: section.id)
             DisclosureGroup(isExpanded: .constant(true)) {
                 ForEach(section.ingredients) { ingredient in
-                    if let ingredientBinding = binding(for: ingredient.id, in: section.id) {
+                    if let ingredientBinding = ingredientBinding(for: ingredient.id, in: section.id) {
                         IngredientRowEditor(
                             ingredient: ingredientBinding,
                             units: units,
@@ -76,24 +127,33 @@ private struct SectionalIngredientsContent: View {
                 
                 Button(action: {
                     withAnimation {
-                        var new = Ingredient(name: "", quantity: 1, unit: "g")
-                        new.id = UUID()
-                        sectionBinding.wrappedValue.ingredients.append(new)
+                        appendIngredient(to: section.id)
                     }
                 }) {
-                    Label("Add Ingredient", systemImage: "plus.circle")
-                        .font(.subheadline)
-                        .foregroundStyle(Color.wickedGreen)
+                    HStack {
+                        Spacer()
+                        Label("Add Ingredient", systemImage: "plus.circle")
+                            .font(.subheadline)
+                            .foregroundStyle(Color.wickedGreen)
+                        Spacer()
+                    }
                 }
+                .buttonStyle(.borderless)
                 .padding(.top, 4)
                 
             } label: {
                 HStack {
                     Image(systemName: "square.stack.3d.up.fill")
                         .foregroundColor(Color.glindaPink)
-                    TextField("Section Title (e.g., Cake)", text: sectionBinding.title)
-                        .bold()
-                        .foregroundStyle(.white)
+                    if let titleBinding = titleBinding(for: section.id) {
+                        NativeTextField(
+                            text: titleBinding,
+                            placeholder: "Section Title (e.g., Cake)",
+                            autocorrectionType: .default,
+                            autocapitalizationType: .words
+                        )
+                        .fontWeight(.bold)
+                    }
                     
                     Spacer()
                     
@@ -127,23 +187,49 @@ private struct SectionalIngredientsContent: View {
             Text("Add New Section")
                 .fontWeight(.medium)
         }
+        .buttonStyle(.borderless)
         .foregroundStyle(Color.glindaPink)
         .listRowBackground(Color.black.opacity(0.2))
     }
 
     // MARK: - Bindings helpers
 
-    private func binding(for sectionID: UUID) -> Binding<RecipeSection> {
-        guard let idx = sections.firstIndex(where: { $0.id == sectionID }) else {
-            return $sections[0]
+    private func titleBinding(for sectionID: UUID) -> Binding<String>? {
+        guard sections.contains(where: { $0.id == sectionID }) else {
+            return nil
         }
-        return $sections[idx]
+
+        return Binding(
+            get: {
+                sections.first(where: { $0.id == sectionID })?.title ?? ""
+            },
+            set: { newValue in
+                guard let index = sections.firstIndex(where: { $0.id == sectionID }) else { return }
+                sections[index].title = newValue
+            }
+        )
     }
 
-    private func binding(for ingredientID: UUID, in sectionID: UUID) -> Binding<Ingredient>? {
-        guard let sIndex = sections.firstIndex(where: { $0.id == sectionID }) else { return nil }
-        guard let iIndex = sections[sIndex].ingredients.firstIndex(where: { $0.id == ingredientID }) else { return nil }
-        return $sections[sIndex].ingredients[iIndex]
+    private func ingredientBinding(for ingredientID: UUID, in sectionID: UUID) -> Binding<Ingredient>? {
+        guard let section = sections.first(where: { $0.id == sectionID }),
+              section.ingredients.contains(where: { $0.id == ingredientID }) else {
+            return nil
+        }
+
+        return Binding(
+            get: {
+                guard let section = sections.first(where: { $0.id == sectionID }),
+                      let ingredient = section.ingredients.first(where: { $0.id == ingredientID }) else {
+                    return Ingredient(id: ingredientID, name: "", quantity: 1, unit: "g")
+                }
+                return ingredient
+            },
+            set: { newValue in
+                guard let sIndex = sections.firstIndex(where: { $0.id == sectionID }),
+                      let iIndex = sections[sIndex].ingredients.firstIndex(where: { $0.id == ingredientID }) else { return }
+                sections[sIndex].ingredients[iIndex] = newValue
+            }
+        )
     }
 
     // MARK: - Mutations
@@ -152,6 +238,13 @@ private struct SectionalIngredientsContent: View {
         if let idx = sections.firstIndex(where: { $0.id == sectionID }) {
             sections.remove(at: idx)
         }
+    }
+
+    private func appendIngredient(to sectionID: UUID) {
+        guard let sIndex = sections.firstIndex(where: { $0.id == sectionID }) else { return }
+        sections[sIndex].ingredients.append(
+            Ingredient(id: UUID(), name: "", quantity: 1, unit: "g")
+        )
     }
 
     private func deleteIngredient(ingredientID: UUID, in sectionID: UUID) {
@@ -196,16 +289,30 @@ private struct FlatIngredientsContent: View {
                 ingredients.append(new)
             }
         }) {
-            Label("Add Ingredient", systemImage: "plus.circle")
-                .font(.subheadline)
-                .foregroundStyle(Color.wickedGreen)
+            HStack {
+                Spacer()
+                Label("Add Ingredient", systemImage: "plus.circle")
+                    .font(.subheadline)
+                    .foregroundStyle(Color.wickedGreen)
+                Spacer()
+            }
         }
+        .buttonStyle(.borderless)
         .listRowBackground(Color.black.opacity(0.2))
     }
 
     private func binding(for id: UUID) -> Binding<Ingredient>? {
-        guard let index = ingredients.firstIndex(where: { $0.id == id }) else { return nil }
-        return $ingredients[index]
+        guard ingredients.contains(where: { $0.id == id }) else { return nil }
+
+        return Binding(
+            get: {
+                ingredients.first(where: { $0.id == id }) ?? Ingredient(id: id, name: "", quantity: 1, unit: "g")
+            },
+            set: { newValue in
+                guard let index = ingredients.firstIndex(where: { $0.id == id }) else { return }
+                ingredients[index] = newValue
+            }
+        )
     }
 
     private func deleteIngredient(id: UUID) {
@@ -237,11 +344,35 @@ struct IngredientsSection: View {
             } else {
                 if !sections.isEmpty {
                     FlatIngredientsContent(ingredients: $sections[0].ingredients, units: units)
+
+                    Button(action: {
+                        withAnimation {
+                            useSections = true
+                            sections.append(
+                                RecipeSection(
+                                    title: "New Section",
+                                    ingredients: [Ingredient(name: "", quantity: 1, unit: "g")],
+                                    instructions: [""]
+                                )
+                            )
+                        }
+                    }) {
+                        HStack {
+                            Spacer()
+                            Text("Add New Section")
+                                .fontWeight(.medium)
+                            Spacer()
+                        }
+                    }
+                    .buttonStyle(.borderless)
+                    .foregroundStyle(Color.glindaPink)
+                    .listRowBackground(Color.black.opacity(0.2))
                 } else {
                     // Fallback to create a section if none exists
                     Button("Add your first ingredient") {
                         sections = [RecipeSection(title: "Main Ingredients", ingredients: [Ingredient(name: "", quantity: 1, unit: "g")], instructions: [""])]
                     }
+                    .buttonStyle(.borderless)
                 }
             }
         }

@@ -12,15 +12,27 @@ import PhotosUI
 
 private let customListRowBackground = Color(uiColor: .black.withAlphaComponent(0.2))
 
+private enum EditRecipeAlert: Identifiable, Hashable {
+    case confirmDeletion
+    case saveFailed
+    case deleteFailed
+    case imageCleanupFailed
+
+    var id: Self { self }
+}
+
 struct EditRecipeView: View {
     @Environment(RecipeManager.self) private var recipeManager
+    @Environment(\.locale) private var locale
     @Environment(StorageManager.self) private var storageManager
     @Environment(\.dismiss) var dismiss
     
     let originalRecipe: Recipe
+    let onRecipeDeleted: (() -> Void)?
     
     // MARK: - State
     @State private var recipeToEdit: Recipe
+    @State private var editableSections: [RecipeSection]
     @State private var useSections: Bool = false
     
     // Image Handling
@@ -30,22 +42,30 @@ struct EditRecipeView: View {
     @State private var isShowingImagePicker = false
     
     // Alerts
-    @State private var showingSaveError = false
-    @State private var showingDeleteConfirmation = false
+    @State private var activeAlert: EditRecipeAlert?
+    @State private var isSaving = false
+    @State private var isDeleting = false
 
-    let availableCategories: [String] = [
-        String(localized: "BASICS"),
-        String(localized: "BREAKFAST & BRUNCH"),
-        String(localized: "APPETIZERS, SIDES & SALADS"),
-        String(localized: "SOUP, STEW & CURRY"),
-        String(localized: "LUNCH & DINNER"),
-        String(localized: "PASTA & GNOCCHI"),
-        String(localized: "QUICK & EASY"),
-        String(localized: "PIZZA, SANDWICHES & BURGER"),
-        String(localized: "CAKE"),
-        String(localized: "FINGERFOOD & SNACKS"),
-        String(localized: "SWEETS & DESSERT")
-    ].sorted()
+    // Nutrition
+    @State private var nutritionResult: NutritionCalculationResult?
+    @State private var isCalculatingNutrition = false
+    @State private var nutritionInfoMessage: LocalizedStringKey?
+    private let nutritionCalculator = RecipeNutritionCalculator.shared
+
+    private var availableCategories: [AppLocalizedOption] {
+        var categories = AppOptionCatalog.recipeCategories
+
+        let currentCategory = recipeToEdit.category.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !currentCategory.isEmpty && !categories.contains(where: { $0.id == currentCategory }) {
+            categories.append(AppLocalizedOption(id: currentCategory, localizationKey: currentCategory))
+        }
+
+        return categories.sorted {
+            $0.resolvedTitle(locale: locale).localizedCaseInsensitiveCompare(
+                $1.resolvedTitle(locale: locale)
+            ) == .orderedAscending
+        }
+    }
     
     private var timeFormatter: NumberFormatter = {
         let formatter = NumberFormatter()
@@ -56,10 +76,15 @@ struct EditRecipeView: View {
     }()
     
     // MARK: - Initialization
-    init(recipe: Recipe) {
+    init(recipe: Recipe, onRecipeDeleted: (() -> Void)? = nil) {
         self.originalRecipe = recipe
+        self.onRecipeDeleted = onRecipeDeleted
         
         var initialRecipe = recipe
+        initialRecipe.category = AppOptionCatalog.canonicalValue(
+            for: initialRecipe.category,
+            in: AppOptionCatalog.recipeCategories
+        )
         
         if initialRecipe.sections == nil || initialRecipe.sections!.isEmpty {
             let initialSection = RecipeSection(
@@ -74,7 +99,9 @@ struct EditRecipeView: View {
                          (initialRecipe.sections!.count == 1 && !initialRecipe.sections![0].title.isEmpty)
         
         _recipeToEdit = State(initialValue: initialRecipe)
+        _editableSections = State(initialValue: initialRecipe.sections ?? [])
         _useSections = State(initialValue: isSectional)
+        _nutritionResult = State(initialValue: initialRecipe.nutrition?.asCalculationResult)
     }
     
     // MARK: - Validation
@@ -82,7 +109,7 @@ struct EditRecipeView: View {
         guard !recipeToEdit.name.trimmingCharacters(in: .whitespaces).isEmpty,
               recipeToEdit.preparationTimeMinutes > 0 else { return false }
         
-        let sectionsToCheck = recipeToEdit.sections ?? []
+        let sectionsToCheck = editableSections
         
         let hasIngredients = sectionsToCheck.contains { section in
             section.ingredients.contains { !$0.name.isEmpty }
@@ -93,13 +120,6 @@ struct EditRecipeView: View {
         }
             
         return hasIngredients && hasInstructions
-    }
-    
-    private var sectionsBinding: Binding<[RecipeSection]> {
-        Binding(
-            get: { recipeToEdit.sections ?? [] },
-            set: { recipeToEdit.sections = $0 }
-        )
     }
     
     // MARK: - View Body
@@ -158,13 +178,16 @@ struct EditRecipeView: View {
 
                 // MARK: Basic Info
                 Section("Basic Information") {
-                    TextField("Recipe Name", text: $recipeToEdit.name)
-                        .autocorrectionDisabled()
-                        .foregroundStyle(.white)
+                    NativeTextField(
+                        text: $recipeToEdit.name,
+                        placeholder: "Recipe Name",
+                        autocorrectionType: .no,
+                        autocapitalizationType: .words
+                    )
                     
                     Picker("Category", selection: $recipeToEdit.category) {
-                        ForEach(availableCategories, id: \.self) { category in
-                            Text(category).tag(category)
+                        ForEach(availableCategories) { category in
+                            Text(category.title).tag(category.id)
                         }
                     }
                     .foregroundStyle(.white)
@@ -195,11 +218,11 @@ struct EditRecipeView: View {
                 .listRowSeparatorTint(Color.white.opacity(0.3))
 
                 // MARK: Ingredients & Instructions
-                IngredientsSection(sections: sectionsBinding, useSections: $useSections)
+                IngredientsSection(sections: $editableSections, useSections: $useSections)
                     .listRowSeparatorTint(Color.white.opacity(0.3))
                     .listRowBackground(customListRowBackground)
                 
-                InstructionsSection(sections: sectionsBinding, useSections: $useSections)
+                InstructionsSection(sections: $editableSections, useSections: $useSections)
                     .listRowSeparatorTint(Color.white.opacity(0.3))
                     .listRowBackground(customListRowBackground)
                 
@@ -213,13 +236,25 @@ struct EditRecipeView: View {
                                 .padding(.leading, 5)
                         }
                         
-                        TextEditor(text: $recipeToEdit.notes.bound)
+                        NativeTextView(text: $recipeToEdit.notes.bound)
                             .frame(minHeight: 100)
-                            .scrollContentBackground(.hidden)
                             .background(Color.black.opacity(0.1))
                             .cornerRadius(8)
-                            .foregroundStyle(.white)
                     }
+                }
+                .listRowBackground(customListRowBackground)
+                .foregroundStyle(.white)
+                .headerProminence(.increased)
+                .listRowSeparatorTint(Color.white.opacity(0.3))
+
+                // MARK: Nutrition
+                Section("Nutrition") {
+                    NutritionCalculationPanel(
+                        result: nutritionResult,
+                        isCalculating: isCalculatingNutrition,
+                        infoMessage: nutritionInfoMessage,
+                        onCalculate: calculateNutritionValues
+                    )
                 }
                 .listRowBackground(customListRowBackground)
                 .foregroundStyle(.white)
@@ -229,16 +264,15 @@ struct EditRecipeView: View {
                 // MARK: Delete Button
                 Section {
                     Button("Delete Recipe", role: .destructive) {
-                        showingDeleteConfirmation = true
+                        activeAlert = .confirmDeletion
                     }
+                    .disabled(isSaving || isDeleting)
                     .listRowBackground(customListRowBackground)
                     .foregroundStyle(.red)
                 }
             }
             .scrollContentBackground(.hidden)
             .listStyle(.grouped)
-            .preferredColorScheme(.dark)
-            .environment(\.editMode, .constant(.active))
         }
         .navigationTitle("Edit Recipe")
         .navigationBarTitleDisplayMode(.inline)
@@ -249,22 +283,46 @@ struct EditRecipeView: View {
                         await handleUpdateRecipe()
                     }
                 }
-                .disabled(!isFormValid)
-                .foregroundStyle(isFormValid ? Color.wickedGreen : Color.gray)
+                .disabled(!isFormValid || isSaving || isDeleting)
+                .foregroundStyle(isFormValid && !isSaving ? Color.wickedGreen : Color.gray)
             }
         }
-        .confirmationDialog("Are you sure you want to delete this recipe?", isPresented: $showingDeleteConfirmation, titleVisibility: .visible) {
-            Button("Delete", role: .destructive) {
-                Task {
-                    await handleDeleteRecipe()
-                }
+        .alert(item: $activeAlert) { alert in
+            switch alert {
+            case .confirmDeletion:
+                Alert(
+                    title: Text("Delete \(1) recipe?"),
+                    message: Text("This action cannot be undone."),
+                    primaryButton: .destructive(Text("Delete")) {
+                        Task { await handleDeleteRecipe() }
+                    },
+                    secondaryButton: .cancel(Text("Cancel"))
+                )
+            case .saveFailed:
+                Alert(
+                    title: Text("Operation Error"),
+                    message: Text("The operation could not be completed. Please try again later."),
+                    dismissButton: .default(Text("OK"))
+                )
+            case .deleteFailed:
+                Alert(
+                    title: Text("Operation Error"),
+                    message: Text("The recipe could not be deleted. Check your connection and try again."),
+                    dismissButton: .default(Text("OK"))
+                )
+            case .imageCleanupFailed:
+                Alert(
+                    title: Text("Operation Error"),
+                    message: Text("The recipe was deleted, but its image could not be removed."),
+                    dismissButton: .default(Text("OK")) {
+                        if let onRecipeDeleted {
+                            onRecipeDeleted()
+                        } else {
+                            dismiss()
+                        }
+                    }
+                )
             }
-            Button("Cancel", role: .cancel) { }
-        }
-        .alert("Operation Error", isPresented: $showingSaveError) {
-            Button("OK", role: .cancel) { }
-        } message: {
-            Text("The operation could not be completed. Please try again later.")
         }
         .sheet(isPresented: $isShowingImagePicker) {
             ImagePicker(selectedImage: $selectedImage, imageWasChanged: $imageWasChanged)
@@ -274,15 +332,35 @@ struct EditRecipeView: View {
                     }
                 }
         }
+        .onChange(of: recipeToEdit.servings) { _, _ in
+            invalidateNutritionResult()
+        }
+        .onChange(of: editableSections) { _, _ in
+            invalidateNutritionResult()
+        }
+        .overlay {
+            if isDeleting {
+                ZStack {
+                    Color.black.opacity(0.55).ignoresSafeArea()
+                    ProgressView("Deleting…")
+                        .padding(20)
+                        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16))
+                        .foregroundStyle(.white)
+                }
+                .zIndex(10)
+            }
+        }
     }
     
     // MARK: - Actions
 
     private func handleUpdateRecipe() async {
-        guard isFormValid else { return }
+        guard isFormValid, !isSaving else { return }
+        isSaving = true
+        defer { isSaving = false }
             
         var finalRecipe = recipeToEdit
-        var sectionsToProcess = finalRecipe.sections ?? []
+        var sectionsToProcess = editableSections
 
         // Clean data: Remove empty rows
         sectionsToProcess = sectionsToProcess.map { section in
@@ -300,10 +378,14 @@ struct EditRecipeView: View {
             let flatIngredients = sectionsToProcess.flatMap { $0.ingredients }
             let flatInstructions = sectionsToProcess.flatMap { $0.instructions }
             
-            finalRecipe.sections = [RecipeSection(title: "", ingredients: flatIngredients, instructions: flatInstructions)]
+            finalRecipe.sections = nil
             finalRecipe.ingredients = flatIngredients
             finalRecipe.instructions = flatInstructions
         }
+
+        finalRecipe.notes = finalRecipe.notes?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == true
+            ? nil
+            : finalRecipe.notes
         
         // Image Logic
         let newImageToUpload: UIImage? = (imageWasChanged && !imageWasRemoved) ? selectedImage : nil
@@ -326,21 +408,86 @@ struct EditRecipeView: View {
             )
             dismiss()
         } catch {
-            print("UPDATE ERROR: \(error.localizedDescription)")
-            showingSaveError = true
+            let nsError = error as NSError
+            print("UPDATE ERROR [\(nsError.domain):\(nsError.code)]: \(nsError.localizedDescription)")
+            activeAlert = .saveFailed
         }
     }
     
     private func handleDeleteRecipe() async {
+        guard !isDeleting, !isSaving else { return }
+        isDeleting = true
+        defer { isDeleting = false }
+
         do {
-            try await recipeManager.deleteRecipe(
+            let result = try await recipeManager.deleteRecipe(
                 recipe: originalRecipe,
                 storageManager: storageManager
             )
-            dismiss()
+            if result.imageCleanupFailures > 0 {
+                activeAlert = .imageCleanupFailed
+            } else {
+                if let onRecipeDeleted {
+                    onRecipeDeleted()
+                } else {
+                    dismiss()
+                }
+            }
         } catch {
             print("Error while deleting: \(error.localizedDescription)")
-            showingSaveError = true
+            activeAlert = .deleteFailed
+        }
+    }
+
+    private var ingredientsForNutrition: [Ingredient] {
+        let sectionIngredients = editableSections.flatMap { $0.ingredients }
+        return sectionIngredients.isEmpty ? recipeToEdit.ingredients : sectionIngredients
+    }
+
+    private func calculateNutritionValues() {
+        guard !isCalculatingNutrition else { return }
+
+        isCalculatingNutrition = true
+        nutritionInfoMessage = nil
+
+        let ingredients = ingredientsForNutrition
+        let servings = recipeToEdit.servings
+        let relatedRecipes = recipeManager.userRecipes
+        let currentRecipeID = recipeToEdit.id
+        let currentRecipeName = recipeToEdit.name
+
+        Task {
+            let result = await nutritionCalculator.calculate(
+                ingredients: ingredients,
+                servings: servings,
+                relatedRecipes: relatedRecipes,
+                currentRecipeId: currentRecipeID,
+                currentRecipeName: currentRecipeName
+            )
+
+            await MainActor.run {
+                nutritionResult = result
+                isCalculatingNutrition = false
+                recipeToEdit.nutrition = result.totalIngredients > 0 ? result.toStoredNutrition() : nil
+
+                if result.totalIngredients == 0 {
+                    nutritionInfoMessage = AppLocalization.key( "Add ingredients with quantities first.")
+                } else if result.matchedIngredients == 0 {
+                    nutritionInfoMessage = AppLocalization.key( "No matching nutrition records were found.")
+                } else if !result.missingIngredients.isEmpty {
+                    nutritionInfoMessage = AppLocalization.key( "Some ingredients were not matched. Values are based on available data.")
+                } else {
+                    nutritionInfoMessage = nil
+                }
+            }
+        }
+    }
+
+    private func invalidateNutritionResult() {
+        if nutritionResult != nil {
+            nutritionResult = nil
+            recipeToEdit.nutrition = nil
+            nutritionInfoMessage = AppLocalization.key( "Recipe changed. Tap calculate again to refresh values.")
         }
     }
 }

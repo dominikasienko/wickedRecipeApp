@@ -20,12 +20,10 @@ private struct InstructionRowEditor: View {
                 .padding(.top, 12)
                 .frame(width: 25)
             
-            TextEditor(text: $instruction)
+            NativeTextView(text: $instruction)
                 .frame(minHeight: 80)
-                .scrollContentBackground(.hidden)
                 .background(Color.white.opacity(0.05))
                 .cornerRadius(8)
-                .foregroundStyle(Color.white)
             
             Button(action: onDelete) {
                 Image(systemName: "minus.circle.fill")
@@ -54,6 +52,7 @@ struct InstructionsSection: View {
                     Button("Add first step") {
                         sections = [RecipeSection(title: "", ingredients: [], instructions: [""])]
                     }
+                    .buttonStyle(.borderless)
                     .foregroundStyle(Color.wickedGreen)
                     .listRowBackground(Color.black.opacity(0.2))
                 }
@@ -68,24 +67,24 @@ private struct SectionalInstructionsContent: View {
     @Binding var sections: [RecipeSection]
 
     var body: some View {
-        ForEach(sections.indices, id: \.self) { sectionIndex in
+        ForEach(sections) { section in
             DisclosureGroup(isExpanded: .constant(true)) {
-                ForEach(sections[sectionIndex].instructions.indices, id: \.self) { instructionIndex in
+                ForEach(section.instructions.indices, id: \.self) { instructionIndex in
                     InstructionRowEditor(
                         index: instructionIndex + 1,
-                        instruction: $sections[sectionIndex].instructions[instructionIndex],
+                        instruction: instructionBinding(sectionID: section.id, instructionIndex: instructionIndex),
                         onDelete: {
-                            deleteInstruction(sectionIndex: sectionIndex, at: instructionIndex)
+                            deleteInstruction(sectionID: section.id, at: instructionIndex)
                         }
                     )
                 }
                 .onMove { indices, newOffset in
-                    sections[sectionIndex].instructions.move(fromOffsets: indices, toOffset: newOffset)
+                    moveInstructions(in: section.id, from: indices, to: newOffset)
                 }
                 
                 Button(action: {
                     withAnimation {
-                        sections[sectionIndex].instructions.append("")
+                        appendInstruction(to: section.id)
                     }
                 }) {
                     HStack {
@@ -95,6 +94,7 @@ private struct SectionalInstructionsContent: View {
                         Spacer()
                     }
                 }
+                .buttonStyle(.borderless)
                 .foregroundStyle(Color.wickedGreen)
                 .padding(.vertical, 8)
                 
@@ -102,22 +102,60 @@ private struct SectionalInstructionsContent: View {
                 HStack {
                     Image(systemName: "list.clipboard.fill")
                         .foregroundColor(Color.wickedGreen)
-                    Text(sections[sectionIndex].title.isEmpty ? "Untitled Section" : sections[sectionIndex].title)
-                        .bold()
-                        .foregroundStyle(Color.white)
+                    let sectionTitle = title(for: section.id)
+                    if sectionTitle.isEmpty {
+                        Text("Untitled Section")
+                            .bold()
+                            .foregroundStyle(Color.white)
+                    } else {
+                        Text(sectionTitle)
+                            .bold()
+                            .foregroundStyle(Color.white)
+                    }
                 }
             }
             .listRowBackground(Color.black.opacity(0.2))
         }
     }
 
-    private func deleteInstruction(sectionIndex: Int, at index: Int) {
+    private func title(for sectionID: UUID) -> String {
+        sections.first(where: { $0.id == sectionID })?.title ?? ""
+    }
+
+    private func appendInstruction(to sectionID: UUID) {
+        guard let sectionIndex = sections.firstIndex(where: { $0.id == sectionID }) else { return }
+        sections[sectionIndex].instructions.append("")
+    }
+
+    private func moveInstructions(in sectionID: UUID, from indices: IndexSet, to newOffset: Int) {
+        guard let sectionIndex = sections.firstIndex(where: { $0.id == sectionID }) else { return }
+        sections[sectionIndex].instructions.move(fromOffsets: indices, toOffset: newOffset)
+    }
+
+    private func deleteInstruction(sectionID: UUID, at index: Int) {
         withAnimation {
-            if sections.indices.contains(sectionIndex),
-               sections[sectionIndex].instructions.indices.contains(index) {
+            guard let sectionIndex = sections.firstIndex(where: { $0.id == sectionID }) else { return }
+            if sections[sectionIndex].instructions.indices.contains(index) {
                 sections[sectionIndex].instructions.remove(at: index)
             }
         }
+    }
+
+    private func instructionBinding(sectionID: UUID, instructionIndex: Int) -> Binding<String> {
+        Binding(
+            get: {
+                guard let sectionIndex = sections.firstIndex(where: { $0.id == sectionID }),
+                      sections[sectionIndex].instructions.indices.contains(instructionIndex) else {
+                    return ""
+                }
+                return sections[sectionIndex].instructions[instructionIndex]
+            },
+            set: { newValue in
+                guard let sectionIndex = sections.firstIndex(where: { $0.id == sectionID }),
+                      sections[sectionIndex].instructions.indices.contains(instructionIndex) else { return }
+                sections[sectionIndex].instructions[instructionIndex] = newValue
+            }
+        )
     }
 }
 
@@ -130,10 +168,7 @@ private struct FlatInstructionsContent: View {
         ForEach(enumerated, id: \.offset) { index, _ in
             InstructionRowEditor(
                 index: index + 1,
-                instruction: Binding(
-                    get: { instructions[index] },
-                    set: { instructions[index] = $0 }
-                ),
+                instruction: instructionBinding(at: index),
                 onDelete: {
                     deleteInstruction(at: index)
                 }
@@ -155,7 +190,7 @@ private struct FlatInstructionsContent: View {
                 Spacer()
             }
         }
-        .buttonStyle(BorderlessButtonStyle())
+        .buttonStyle(.borderless)
         .foregroundStyle(Color.wickedGreen)
         .listRowBackground(Color.black.opacity(0.2))
         .padding(.vertical, 8)
@@ -167,5 +202,17 @@ private struct FlatInstructionsContent: View {
                 instructions.remove(at: index)
             }
         }
+    }
+
+    private func instructionBinding(at index: Int) -> Binding<String> {
+        Binding(
+            get: {
+                instructions.indices.contains(index) ? instructions[index] : ""
+            },
+            set: { newValue in
+                guard instructions.indices.contains(index) else { return }
+                instructions[index] = newValue
+            }
+        )
     }
 }

@@ -9,11 +9,13 @@ import SwiftUI
 import FirebaseAuth
 
 struct MainAppView: View {
+    @Environment(\.locale) private var locale
     @Environment(AuthManager.self) private var authManager
     
     var body: some View {
         VStack(spacing: 20) {
-            Text("Hello, \(authManager.user?.email ?? "user")!")
+            let greetingName = authManager.user?.email ?? AppLocalization.resolved("User", locale: locale)
+            Text("Hello, \(greetingName)!")
                 .font(.title)
             
             Button("Log out") {
@@ -26,17 +28,6 @@ struct MainAppView: View {
             .buttonStyle(.bordered)
             .tint(.orange)
             
-            Button("Delete account") {
-                Task {
-                    do {
-                        try await authManager.deleteAccount()
-                    } catch {
-                        print("Account deletion error: \(error.localizedDescription)")
-                    }
-                }
-            }
-            .buttonStyle(.bordered)
-            .tint(.red)
         }
     }
 }
