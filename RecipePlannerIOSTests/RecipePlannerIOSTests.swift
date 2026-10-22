@@ -179,6 +179,26 @@ final class RecipePlannerIOSTests: XCTestCase {
         XCTAssertNil(profile.calculateWaterGoalMl())
     }
 
+    func testProfileImageEditStatePreservesReplacesAndRemovesExplicitly() throws {
+        var profile = makeProfile(age: 30, sex: "woman", activity: "active", weight: 65, height: 165)
+        profile.profileImageURL = "https://storage.example.com/users/test/profile.jpg"
+
+        let unchanged = try XCTUnwrap(ProfileImageEditState.unchanged.applying(to: profile))
+        XCTAssertEqual(unchanged.profileImageURL, profile.profileImageURL)
+
+        let replaced = try XCTUnwrap(
+            ProfileImageEditState.replacement.applying(to: profile, replacementURL: "https://storage.example.com/users/test/new-profile.jpg")
+        )
+        XCTAssertEqual(replaced.profileImageURL, "https://storage.example.com/users/test/new-profile.jpg")
+        XCTAssertNil(ProfileImageEditState.replacement.applying(to: profile))
+
+        let removed = try XCTUnwrap(ProfileImageEditState.removal.applying(to: profile))
+        XCTAssertNil(removed.profileImageURL)
+
+        profile.profileImageURL = nil
+        XCTAssertNil(ProfileImageEditState.removal.applying(to: profile)?.profileImageURL)
+    }
+
     func testPrivacyPolicyUsesCanonicalURLWithoutLanguageFragment() {
         XCTAssertEqual(LegalLinks.privacyPolicy.absoluteString, "https://wickedrecipeprivacy.netlify.app/")
         XCTAssertNil(LegalLinks.privacyPolicy.fragment)

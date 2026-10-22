@@ -19,8 +19,11 @@ struct ProfileEditView: View {
 
     @State private var editableProfile: UserProfile
     @State private var selectedImage: UIImage?
+    @State private var profileImageEditState: ProfileImageEditState = .unchanged
     @State private var savingError: LocalizedStringKey?
+    @State private var dismissAfterAlert = false
     @State private var isShowingDietSelect = false
+    @State private var isSaving = false
 
     init(profile: UserProfile) {
         _editableProfile = State(initialValue: profile.canonicalizedForStorage())
@@ -30,7 +33,12 @@ struct ProfileEditView: View {
         NavigationStack {
             Form {
                 Section("Profile picture") {
-                    ProfileImagePickerView(profileImage: $selectedImage, profileImageURL: $editableProfile.profileImageURL)
+                    ProfileImagePickerView(
+                        profileImage: $selectedImage,
+                        profileImageURL: $editableProfile.profileImageURL,
+                        onImageSelected: { profileImageEditState = .replacement },
+                        onImageRemoved: { profileImageEditState = .removal }
+                    )
                         .frame(maxWidth: .infinity, alignment: .center)
                 }
 
@@ -101,14 +109,32 @@ struct ProfileEditView: View {
                     Button("Cancel") { dismiss() }
                 }
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button("Save") {
+                    Button {
                         Task { await saveProfile() }
+                    } label: {
+                        if isSaving {
+                            ProgressView()
+                        } else {
+                            Text("Save").bold()
+                        }
                     }
-                    .bold()
+                    .disabled(isSaving)
                 }
             }
-            .alert("Write error", isPresented: .constant(savingError != nil)) {
-                 Button("OK") { savingError = nil }
+            .alert(
+                "Write error",
+                isPresented: Binding(
+                    get: { savingError != nil },
+                    set: { if !$0 { savingError = nil } }
+                )
+            ) {
+                 Button("OK") {
+                     savingError = nil
+                     if dismissAfterAlert {
+                         dismissAfterAlert = false
+                         dismiss()
+                     }
+                 }
             } message: {
                  Text(savingError ?? AppLocalization.key("An unknown error occurred."))
             }
@@ -117,10 +143,14 @@ struct ProfileEditView: View {
     
 // MARK: Firebase
     private func saveProfile() async {
+        guard !isSaving else { return }
         guard let uid = authManager.user?.uid else {
             savingError = AppLocalization.key("An unknown error occurred.")
             return
         }
+
+        isSaving = true
+        defer { isSaving = false }
         
         if !AgeEligibility.isEligible(dateOfBirth: editableProfile.dateOfBirth) {
             savingError = AppLocalization.key("Date of birth must describe an age between 16 and 100.")
@@ -139,28 +169,48 @@ struct ProfileEditView: View {
         
         do {
             var profileToSave = editableProfile
-            
-            if let image = selectedImage {
+
+            switch profileImageEditState {
+            case .unchanged:
+                break
+            case .replacement:
+                guard let image = selectedImage else {
+                    savingError = AppLocalization.key("The selected profile photo is unavailable. Please choose it again.")
+                    return
+                }
                 let url = try await storageManager.uploadProfileImage(image: image, userId: uid)
-                profileToSave.profileImageURL = url
-            } else if selectedImage == nil {
-                profileToSave.profileImageURL = editableProfile.profileImageURL
+                guard let updatedProfile = profileImageEditState.applying(to: profileToSave, replacementURL: url) else {
+                    savingError = AppLocalization.key("The selected profile photo is unavailable. Please choose it again.")
+                    return
+                }
+                profileToSave = updatedProfile
+            case .removal:
+                guard let updatedProfile = profileImageEditState.applying(to: profileToSave) else { return }
+                profileToSave = updatedProfile
             }
 
             profileToSave = profileToSave.canonicalizedForStorage()
 
-            try await profileManager.saveUserProfile(profile: profileToSave, uid: uid)
-            await MainActor.run {
-                profileManager.userProfile = profileToSave
+            try await profileManager.saveUserProfile(
+                profile: profileToSave,
+                uid: uid,
+                removingProfileImage: profileImageEditState == .removal
+            )
+            waterManager.calculateGoal(profile: profileToSave)
+
+            if profileImageEditState == .removal {
+                do {
+                    try await storageManager.deleteProfileImage(userId: uid)
+                } catch {
+                    savingError = AppLocalization.key("Your profile photo was removed, but its stored file could not be deleted. It is no longer linked to your profile.")
+                    dismissAfterAlert = true
+                    return
+                }
             }
 
-            waterManager.calculateGoal(profile: profileToSave)
-            
             dismiss() 
         } catch {
-            await MainActor.run {
-                self.savingError = AppLocalization.key("An unknown error occurred.")
-            }
+            savingError = AppLocalization.key("We couldn't save your profile changes. Please check your connection and try again.")
         }
     }
 }

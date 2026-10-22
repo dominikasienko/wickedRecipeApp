@@ -11,9 +11,12 @@ import UIKit
 
 struct ProfileImagePickerView: View {
     @State private var selectedItem: PhotosPickerItem?
+    @State private var imageLoadRequestID = UUID()
     
     @Binding var profileImage: UIImage?
     @Binding var profileImageURL: String?
+    var onImageSelected: () -> Void = {}
+    var onImageRemoved: () -> Void = {}
     
     let defaultIcon = Image(systemName: "person.circle.fill")
 
@@ -40,13 +43,18 @@ struct ProfileImagePickerView: View {
                     Text("Change photo")
                 }
                 .onChange(of: selectedItem) { _, newValue in
+                    guard let newValue else { return }
+                    let requestID = UUID()
+                    imageLoadRequestID = requestID
                     Task {
-                        if let data = try? await newValue?.loadTransferable(type: Data.self),
+                        if let data = try? await newValue.loadTransferable(type: Data.self),
                            let image = UIImage(data: data) {
-                            
+                            guard imageLoadRequestID == requestID else { return }
                             profileImage = image
                             profileImageURL = nil
+                            onImageSelected()
                         } else {
+                            guard imageLoadRequestID == requestID else { return }
                             selectedItem = nil
                         }
                     }
@@ -56,7 +64,9 @@ struct ProfileImagePickerView: View {
                     Button("Delete photo") {
                         profileImage = nil
                         profileImageURL = nil
-                        selectedItem = nil 
+                        selectedItem = nil
+                        imageLoadRequestID = UUID()
+                        onImageRemoved()
                     }
                     .tint(.red)
                 }

@@ -235,3 +235,23 @@ struct UserProfile: Codable, Identifiable {
         )
     }
 }
+
+enum ProfileImageEditState: Equatable {
+    case unchanged
+    case replacement
+    case removal
+
+    func applying(to profile: UserProfile, replacementURL: String? = nil) -> UserProfile? {
+        var updatedProfile = profile
+        switch self {
+        case .unchanged:
+            return updatedProfile
+        case .replacement:
+            guard let replacementURL, !replacementURL.isEmpty else { return nil }
+            updatedProfile.profileImageURL = replacementURL
+        case .removal:
+            updatedProfile.profileImageURL = nil
+        }
+        return updatedProfile
+    }
+}

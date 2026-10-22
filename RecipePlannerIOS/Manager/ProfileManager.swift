@@ -65,13 +65,21 @@ class ProfileManager {
     }
     
     /// Zapisuje dane profilowe użytkownika do Firestore.
-    func saveUserProfile(profile: UserProfile, uid: String) async throws {
+    func saveUserProfile(profile: UserProfile, uid: String, removingProfileImage: Bool = false) async throws {
         let collectionRef = db().collection("users")
         let normalizedProfile = profile.canonicalizedForStorage()
         let document = collectionRef.document(uid)
         
         do {
-            try await writeProfile(normalizedProfile, to: document)
+            if removingProfileImage {
+                guard Auth.auth().currentUser?.uid == uid,
+                      normalizedProfile.profileImageURL == nil else {
+                    throw NSError(domain: "ProfileError", code: 403)
+                }
+                try await writeProfileRemovingImage(normalizedProfile, to: document)
+            } else {
+                try await writeProfile(normalizedProfile, to: document)
+            }
             await MainActor.run {
                 self.userProfile = normalizedProfile
                 self.didCreateDefaultProfile = false
@@ -156,6 +164,28 @@ class ProfileManager {
             } catch {
                 timeout.cancel()
                 result.complete(.failure(error))
+            }
+        }
+    }
+
+    private func writeProfileRemovingImage(_ profile: UserProfile, to document: DocumentReference) async throws {
+        var fields = try Firestore.Encoder().encode(profile)
+        fields["profileImageURL"] = FieldValue.delete()
+
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+            let result = ProfileWriteContinuation(continuation)
+            let timeout = DispatchWorkItem {
+                result.complete(.failure(ProfileWriteError.timedOut))
+            }
+            DispatchQueue.global().asyncAfter(deadline: .now() + 30, execute: timeout)
+
+            document.updateData(fields) { error in
+                timeout.cancel()
+                if let error {
+                    result.complete(.failure(error))
+                } else {
+                    result.complete(.success(()))
+                }
             }
         }
     }
