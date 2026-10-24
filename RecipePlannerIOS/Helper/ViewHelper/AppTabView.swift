@@ -42,6 +42,30 @@ enum TabItem: String, CaseIterable {
         case .settings: return "Settings"
         }
     }
+
+    var accessibilityIdentifier: String {
+        switch self {
+        case .home: return "tab.home"
+        case .favorites: return "tab.favorites"
+        case .calendar: return "tab.calendar"
+        case .seasonal: return "tab.seasonal"
+        case .water: return "tab.waterTracker"
+        case .profile: return "tab.profile"
+        case .settings: return "tab.settings"
+        }
+    }
+
+    var screenAccessibilityIdentifier: String {
+        switch self {
+        case .home: return "screen.home"
+        case .favorites: return "screen.favorites"
+        case .calendar: return "screen.calendar"
+        case .seasonal: return "screen.seasonal"
+        case .water: return "screen.waterTracker"
+        case .profile: return "screen.profile"
+        case .settings: return "screen.settings"
+        }
+    }
 }
 
 struct AppTabView: View {
@@ -89,6 +113,7 @@ struct AppTabView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .accessibilityIdentifier(selectedTab.screenAccessibilityIdentifier)
     }
     
     private func customTabBar(bottomInset: CGFloat) -> some View {
@@ -115,11 +140,14 @@ struct AppTabView: View {
                             .padding(.vertical, 8)
                             .frame(minWidth: 60)
                         }
+                        .accessibilityLabel(Text(tab.localizedTitle))
+                        .accessibilityIdentifier(tab.accessibilityIdentifier)
                     }
                 }
                 .padding(.horizontal)
             }
             .frame(height: 50)
+            .accessibilityIdentifier("navigation.bar")
         }
         .padding(.bottom, iconBottomPadding)
         .background(.ultraThinMaterial)

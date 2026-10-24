@@ -18,39 +18,66 @@ final class RecipePlannerIOSUITests: XCTestCase {
         app.launch()
     }
 
-    /// Testuje, czy główne zakładki dolnego menu (TabBar) są widoczne i klikalne.
+    /// Tests that the main custom navigation controls are visible and available.
     @MainActor
     func testNavigationTabBarItemsExist() throws {
-        let tabBar = app.tabBars.firstMatch
-        
-        // Sprawdzenie czy ikony z AppTabView.swift są widoczne
-        XCTAssertTrue(tabBar.buttons["Home"].exists, "The Home tab should be visible.")
-        XCTAssertTrue(tabBar.buttons["Calendar"].exists, "The Calendar tab should be visible.")
-        XCTAssertTrue(tabBar.buttons["Water tracker"].exists, "The Water tracker tab should be visible.")
-        XCTAssertTrue(tabBar.buttons["Profile"].exists, "The Profile tab should be visible.")
+        // AppTabView uses a custom horizontal navigation bar, not a native TabView.
+        XCTAssertTrue(
+            waitForCustomTab(in: app, identifier: RecipePlannerUITestIdentifiers.homeTab, name: "Home").exists,
+            "The Home tab should be visible."
+        )
+        XCTAssertTrue(
+            waitForCustomTab(in: app, identifier: RecipePlannerUITestIdentifiers.calendarTab, name: "Calendar").exists,
+            "The Calendar tab should be visible."
+        )
+        XCTAssertTrue(
+            waitForCustomTab(in: app, identifier: RecipePlannerUITestIdentifiers.waterTrackerTab, name: "Water tracker").exists,
+            "The Water tracker tab should be visible."
+        )
+        XCTAssertTrue(
+            waitForCustomTab(in: app, identifier: RecipePlannerUITestIdentifiers.profileTab, name: "Profile").exists,
+            "The Profile tab should be visible."
+        )
     }
 
     /// Symuluje przejście do ekranu dodawania wody i sprawdza interakcję.
     @MainActor
     func testWaterTrackerNavigation() throws {
-        let waterTab = app.tabBars.buttons["Water tracker"]
-        XCTAssertTrue(waterTab.exists)
-        waterTab.tap()
-        
-        let waterHeader = app.staticTexts["Daily Intake"]
-        XCTAssertTrue(waterHeader.waitForExistence(timeout: 2), "The water screen should load.")
+        tapCustomTab(
+            in: app,
+            identifier: RecipePlannerUITestIdentifiers.waterTrackerTab,
+            name: "Water tracker"
+        )
+
+        XCTAssertTrue(
+            app.navigationBars["Hydration Tracker"].waitForExistence(timeout: 10),
+            "The Hydration Tracker screen should load after selecting Water tracker."
+        )
     }
 
     /// Testuje proces nawigacji do ustawień profilu.
     @MainActor
     func testProfileSettingsNavigation() throws {
-        app.tabBars.buttons["Profile"].tap()
-        
-        let settingsButton = app.buttons["gear"] 
-        if settingsButton.exists {
-            settingsButton.tap()
-            XCTAssertTrue(app.staticTexts["Settings"].exists, "The settings screen should appear.")
-        }
+        // Profile and Settings are separate destinations in the current custom bar.
+        tapCustomTab(
+            in: app,
+            identifier: RecipePlannerUITestIdentifiers.profileTab,
+            name: "Profile"
+        )
+        XCTAssertTrue(
+            app.navigationBars["My Profile"].waitForExistence(timeout: 10),
+            "The profile screen should appear after selecting Profile."
+        )
+
+        tapCustomTab(
+            in: app,
+            identifier: RecipePlannerUITestIdentifiers.settingsTab,
+            name: "Settings"
+        )
+        XCTAssertTrue(
+            app.navigationBars["Settings"].waitForExistence(timeout: 10),
+            "The settings screen should appear after selecting Settings."
+        )
     }
 
     /// Testuje wydajność uruchamiania aplikacji.

@@ -316,6 +316,7 @@ private struct HealthDataConsentGate: View {
                             .foregroundStyle(.white)
                     }
                     .tint(Color.wickedGreen)
+                    .accessibilityIdentifier("consent.minimumAge")
 
                     Toggle(isOn: $consentsToHealthData) {
                         VStack(alignment: .leading, spacing: 7) {
@@ -328,6 +329,7 @@ private struct HealthDataConsentGate: View {
                         }
                     }
                     .tint(Color.wickedGreen)
+                    .accessibilityIdentifier("consent.healthData")
 
                     if !profileAgeEligible {
                         Text(AppLocalization.key("Update your date of birth to an age of 16 or older before continuing."))
@@ -351,6 +353,7 @@ private struct HealthDataConsentGate: View {
                         .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
                     }
                     .disabled(!confirmsMinimumAge || !consentsToHealthData || !profileAgeEligible || isDeletingAccount)
+                    .accessibilityIdentifier("consent.continue")
 
                     HStack {
                         Button(AppLocalization.key("Sign out"), action: onSignOut)

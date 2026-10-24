@@ -24,28 +24,26 @@ final class RecipePlannerIOSUITestsLaunchTests: XCTestCase {
         app.launch()
 
         // 1. Zrzut ekranu: Ekran startowy (Home)
+        XCTAssertTrue(
+            waitForCustomTab(in: app, identifier: RecipePlannerUITestIdentifiers.homeTab, name: "Home").exists,
+            "The launch test requires an authenticated, consented test account."
+        )
         captureScreenshot(name: "01_HomeScreen", app: app)
 
         // 2. Przejście do kalendarza i zrzut
-        let calendarTab = app.tabBars.buttons["Calendar"]
-        if calendarTab.waitForExistence(timeout: 5) {
-            calendarTab.tap()
-            captureScreenshot(name: "02_CalendarScreen", app: app)
-        }
+        tapCustomTab(in: app, identifier: RecipePlannerUITestIdentifiers.calendarTab, name: "Calendar")
+        XCTAssertTrue(app.navigationBars["Meal Plan"].waitForExistence(timeout: 10))
+        captureScreenshot(name: "02_CalendarScreen", app: app)
 
         // 3. Przejście do monitora wody
-        let waterTab = app.tabBars.buttons["Water tracker"]
-        if waterTab.exists {
-            waterTab.tap()
-            captureScreenshot(name: "03_WaterTrackerScreen", app: app)
-        }
+        tapCustomTab(in: app, identifier: RecipePlannerUITestIdentifiers.waterTrackerTab, name: "Water tracker")
+        XCTAssertTrue(app.navigationBars["Hydration Tracker"].waitForExistence(timeout: 10))
+        captureScreenshot(name: "03_WaterTrackerScreen", app: app)
 
         // 4. Przejście do profilu
-        let profileTab = app.tabBars.buttons["Profile"]
-        if profileTab.exists {
-            profileTab.tap()
-            captureScreenshot(name: "04_ProfileScreen", app: app)
-        }
+        tapCustomTab(in: app, identifier: RecipePlannerUITestIdentifiers.profileTab, name: "Profile")
+        XCTAssertTrue(app.navigationBars["My Profile"].waitForExistence(timeout: 10))
+        captureScreenshot(name: "04_ProfileScreen", app: app)
     }
 
     /// Funkcja pomocnicza do robienia zrzutów ekranu

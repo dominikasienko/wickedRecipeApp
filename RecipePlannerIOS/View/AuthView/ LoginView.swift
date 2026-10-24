@@ -110,6 +110,7 @@ struct LoginView: View {
                         focusedField = .password
                     }
                     .foregroundStyle(.white)
+                    .accessibilityIdentifier("auth.email")
             }
 
             loginField(icon: "lock.fill") {
@@ -119,6 +120,7 @@ struct LoginView: View {
                     .focused($focusedField, equals: .password)
                     .onSubmit(login)
                     .foregroundStyle(.white)
+                    .accessibilityIdentifier("auth.password")
             }
 
             if let errorMessage {
@@ -140,6 +142,7 @@ struct LoginView: View {
             .buttonStyle(.plain)
             .disabled(isSocialAuthInProgress)
             .keyboardShortcut(.defaultAction)
+            .accessibilityIdentifier("auth.login")
 
             HStack(spacing: 12) {
                 Rectangle().fill(Color.white.opacity(0.2)).frame(height: 1)
