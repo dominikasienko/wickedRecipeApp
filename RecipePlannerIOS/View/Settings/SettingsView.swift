@@ -418,6 +418,7 @@ struct SettingsView: View {
             .scrollContentBackground(.hidden)
             .listStyle(.insetGrouped)
             .foregroundStyle(.white)
+            .wickedReadableWidth(900)
         } else {
             ProgressView()
                 .tint(.white)
@@ -1068,17 +1069,7 @@ private struct WickedGlassBackground: View {
     var body: some View {
         ZStack {
             Color.darkBackground.ignoresSafeArea()
-            Ellipse()
-                .fill(Color.glindaPink.opacity(0.3))
-                .frame(width: 300, height: 300)
-                .position(x: 50, y: 100)
-                .blur(radius: 100)
-                .ignoresSafeArea()
-            Ellipse()
-                .fill(Color.wickedGreen.opacity(0.3))
-                .frame(width: 250, height: 250)
-                .position(x: 300, y: 700)
-                .blur(radius: 80)
+            WickedAmbientGlowLayer(pinkOpacity: 0.3, greenOpacity: 0.3)
                 .ignoresSafeArea()
         }
     }

@@ -356,6 +356,95 @@ final class RecipePlannerIOSTests: XCTestCase {
         )
         XCTAssertEqual(legacyFactoredRecord.totalIntakeML, 1_000, "Legacy factors must not change logged drink volume.")
     }
+
+    func testWaterDailyTotalsSeparateEntriesByTimestampAcrossDocuments() throws {
+        let calendar = waterTestCalendar(timeZone: try XCTUnwrap(TimeZone(secondsFromGMT: 0)))
+        let october22 = try waterTestDate("2026-10-22T12:00:00Z")
+        let october23 = try waterTestDate("2026-10-23T12:00:00Z")
+
+        // The third entry reproduces the legacy midnight bug: it has an October 23
+        // timestamp but was saved in the October 22 document.
+        let records = [makeWaterRecord(
+            documentID: "2026-10-22",
+            entries: [
+                WaterEntry(id: UUID(uuidString: "00000000-0000-0000-0000-000000000040")!, amountMl: 40,
+                           timestamp: try waterTestDate("2026-10-22T09:00:00Z")),
+                WaterEntry(id: UUID(uuidString: "00000000-0000-0000-0000-000000000150")!, amountMl: 150,
+                           timestamp: try waterTestDate("2026-10-22T15:00:00Z")),
+                WaterEntry(id: UUID(uuidString: "00000000-0000-0000-0000-000000000023")!, amountMl: 150,
+                           timestamp: try waterTestDate("2026-10-23T08:00:00Z"))
+            ]
+        )]
+
+        XCTAssertEqual(WaterIntakeDay.total(in: records, on: october22, calendar: calendar), 190)
+        XCTAssertEqual(WaterIntakeDay.total(in: records, on: october23, calendar: calendar), 150)
+        XCTAssertEqual(WaterIntakeDay.entries(in: records).reduce(0) { $0 + $1.amountMl }, 340)
+        XCTAssertEqual(WaterIntakeDay.documentID(for: october22, calendar: calendar), "2026-10-22")
+        XCTAssertEqual(WaterIntakeDay.documentID(for: october23, calendar: calendar), "2026-10-23")
+    }
+
+    func testWaterLogOnNextDayUsesNewDocumentAndPreservesPreviousDay() throws {
+        let calendar = waterTestCalendar(timeZone: try XCTUnwrap(TimeZone(secondsFromGMT: 0)))
+        let october22 = try waterTestDate("2026-10-22T12:00:00Z")
+        let october23 = try waterTestDate("2026-10-23T08:00:00Z")
+        let previousEntries = [
+            WaterEntry(amountMl: 40, timestamp: try waterTestDate("2026-10-22T09:00:00Z")),
+            WaterEntry(amountMl: 150, timestamp: try waterTestDate("2026-10-22T15:00:00Z"))
+        ]
+        let recordsBeforeAdd = [makeWaterRecord(documentID: "2026-10-22", entries: previousEntries)]
+        let newEntry = WaterEntry(amountMl: 150, timestamp: october23)
+        let destinationID = WaterIntakeDay.documentID(for: newEntry.timestamp, calendar: calendar)
+        let recordsAfterAdd = WaterIntakeDay.appending(
+            newEntry,
+            documentID: destinationID,
+            to: recordsBeforeAdd,
+            userId: "water-test-user"
+        )
+
+        XCTAssertEqual(destinationID, "2026-10-23")
+        XCTAssertNotEqual(destinationID, recordsBeforeAdd[0].id)
+        XCTAssertEqual(recordsBeforeAdd[0].entries, previousEntries)
+        XCTAssertEqual(WaterIntakeDay.total(in: recordsAfterAdd, on: october22, calendar: calendar), 190)
+        XCTAssertEqual(WaterIntakeDay.total(in: recordsAfterAdd, on: october23, calendar: calendar), 150)
+    }
+
+    func testWaterDailyTotalCountsUniqueSameDayEntriesOnceAndSwitchesDates() throws {
+        let calendar = waterTestCalendar(timeZone: try XCTUnwrap(TimeZone(secondsFromGMT: 0)))
+        let october22 = try waterTestDate("2026-10-22T12:00:00Z")
+        let october23 = try waterTestDate("2026-10-23T12:00:00Z")
+        let repeated = WaterEntry(
+            id: UUID(uuidString: "00000000-0000-0000-0000-000000000250")!,
+            amountMl: 250,
+            timestamp: try waterTestDate("2026-10-22T10:00:00Z")
+        )
+        let records = [
+            makeWaterRecord(documentID: "2026-10-22", entries: [
+                repeated,
+                repeated,
+                WaterEntry(amountMl: 40, timestamp: try waterTestDate("2026-10-22T11:00:00Z")),
+                WaterEntry(amountMl: 150, timestamp: try waterTestDate("2026-10-23T11:00:00Z"))
+            ])
+        ]
+
+        XCTAssertEqual(WaterIntakeDay.total(in: records, on: october22, calendar: calendar), 290)
+        XCTAssertEqual(WaterIntakeDay.total(in: records, on: october23, calendar: calendar), 150)
+        XCTAssertEqual(WaterIntakeDay.total(in: records, on: october22, calendar: calendar), 290)
+    }
+
+    func testWaterDayKeysAndTotalsRespectLocalMidnightAndDaylightSavingTime() throws {
+        let timezone = try XCTUnwrap(TimeZone(identifier: "America/Los_Angeles"))
+        let calendar = waterTestCalendar(timeZone: timezone)
+        let beforeMidnight = try waterTestDate("2026-03-08T07:59:59Z")
+        let afterMidnight = try waterTestDate("2026-03-08T08:00:00Z")
+        let afterDaylightSavingTransition = try waterTestDate("2026-03-08T10:00:00Z")
+        let start = try XCTUnwrap(WaterIntakeDay.interval(containing: afterMidnight, calendar: calendar))
+
+        XCTAssertEqual(WaterIntakeDay.documentID(for: beforeMidnight, calendar: calendar), "2026-03-07")
+        XCTAssertEqual(WaterIntakeDay.documentID(for: afterMidnight, calendar: calendar), "2026-03-08")
+        XCTAssertEqual(start.duration, 23 * 60 * 60, accuracy: 0.01)
+        XCTAssertFalse(WaterIntakeDay.contains(beforeMidnight, on: afterMidnight, calendar: calendar))
+        XCTAssertTrue(WaterIntakeDay.contains(afterDaylightSavingTransition, on: afterMidnight, calendar: calendar))
+    }
     
     // MARK: - Date Extension Tests
     
@@ -386,6 +475,25 @@ final class RecipePlannerIOSTests: XCTestCase {
             ingredients: [],
             instructions: []
         )
+    }
+
+    private func makeWaterRecord(documentID: String, entries: [WaterEntry]) -> WaterRecord {
+        var record = WaterRecord.empty(userId: "water-test-user")
+        record.id = documentID
+        record.entries = entries
+        return record
+    }
+
+    private func waterTestCalendar(timeZone: TimeZone) -> Calendar {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = timeZone
+        return calendar
+    }
+
+    private func waterTestDate(_ value: String) throws -> Date {
+        let formatter = ISO8601DateFormatter()
+        let date = formatter.date(from: value)
+        return try XCTUnwrap(date, "Invalid fixed water-tracker test date: \(value)")
     }
 
     private func makeProfile(

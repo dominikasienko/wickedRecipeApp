@@ -71,6 +71,7 @@ struct FavoritesView: View {
                     }
                     .padding(.top, 14)
                     .padding(.bottom, 24)
+                    .wickedReadableWidth(780)
                 }
                 .safeAreaInset(edge: .top, spacing: 0) {
                     favoritesTopBar

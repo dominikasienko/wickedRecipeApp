@@ -84,9 +84,84 @@ struct WaterRecord: Codable, Identifiable {
     }
 
     static func formattedDate(_ date: Date) -> String {
+        formattedDate(date, calendar: .autoupdatingCurrent)
+    }
+
+    static func formattedDate(_ date: Date, calendar: Calendar) -> String {
         let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.calendar = calendar
+        formatter.timeZone = calendar.timeZone
         formatter.dateFormat = "yyyy-MM-dd"
         return formatter.string(from: date)
+    }
+}
+
+/// Date and aggregation rules shared by the tracker, history, and tests.
+enum WaterIntakeDay {
+    static func documentID(for date: Date, calendar: Calendar = .autoupdatingCurrent) -> String {
+        WaterRecord.formattedDate(date, calendar: calendar)
+    }
+
+    static func interval(containing date: Date, calendar: Calendar = .autoupdatingCurrent) -> DateInterval? {
+        calendar.dateInterval(of: .day, for: date)
+    }
+
+    static func contains(_ timestamp: Date, on date: Date, calendar: Calendar = .autoupdatingCurrent) -> Bool {
+        guard let interval = interval(containing: date, calendar: calendar) else { return false }
+        return timestamp >= interval.start && timestamp < interval.end
+    }
+
+    static func entries(in records: [WaterRecord]) -> [WaterEntry] {
+        var seenIDs = Set<UUID>()
+        return records
+            .flatMap(\.entries)
+            .filter { seenIDs.insert($0.id).inserted }
+    }
+
+    static func appending(
+        _ entry: WaterEntry,
+        documentID: String,
+        to records: [WaterRecord],
+        userId: String
+    ) -> [WaterRecord] {
+        var updatedRecords = records
+        guard !entries(in: updatedRecords).contains(where: { $0.id == entry.id }) else {
+            return updatedRecords
+        }
+
+        if let index = updatedRecords.firstIndex(where: { $0.id == documentID }) {
+            updatedRecords[index].entries.append(entry)
+        } else {
+            var record = WaterRecord(
+                id: nil,
+                userId: userId,
+                entries: [entry],
+                amountMl: 0,
+                timestamp: entry.timestamp
+            )
+            record.id = documentID
+            updatedRecords.append(record)
+        }
+
+        return updatedRecords.sorted { ($0.id ?? "") > ($1.id ?? "") }
+    }
+
+    static func entries(
+        in records: [WaterRecord],
+        on date: Date,
+        calendar: Calendar = .autoupdatingCurrent
+    ) -> [WaterEntry] {
+        entries(in: records).filter { contains($0.timestamp, on: date, calendar: calendar) }
+    }
+
+    static func total(
+        in records: [WaterRecord],
+        on date: Date,
+        calendar: Calendar = .autoupdatingCurrent
+    ) -> Double {
+        entries(in: records, on: date, calendar: calendar)
+            .reduce(0) { $0 + $1.amountMl }
     }
 }
 

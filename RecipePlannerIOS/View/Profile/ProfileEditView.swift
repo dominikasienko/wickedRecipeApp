@@ -103,6 +103,7 @@ struct ProfileEditView: View {
                         }
                 }
             }
+            .wickedReadableWidth(760)
             .navigationTitle("Edit profile")
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {

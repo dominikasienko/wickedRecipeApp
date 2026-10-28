@@ -32,18 +32,7 @@ struct ShoppingListView: View {
             ZStack(alignment: .bottomTrailing) {
                 Color.darkBackground.ignoresSafeArea()
                 
-                Ellipse()
-                    .fill(Color.glindaPink.opacity(0.3))
-                    .frame(width: 300, height: 300)
-                    .position(x: 350, y: 100)
-                    .blur(radius: 100)
-                    .ignoresSafeArea()
-                
-                Ellipse()
-                    .fill(Color.wickedGreen.opacity(0.3))
-                    .frame(width: 200, height: 200)
-                    .position(x: 50, y: 700)
-                    .blur(radius: 80)
+                WickedAmbientGlowLayer(pinkOpacity: 0.3, greenOpacity: 0.3, greenDiameter: 200)
                     .ignoresSafeArea()
 
                 ScrollView {
@@ -121,6 +110,7 @@ struct ShoppingListView: View {
                         
                         Spacer(minLength: 80)
                     }
+                    .wickedReadableWidth(900)
                 }
                 
                 Button {

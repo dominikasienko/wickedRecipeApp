@@ -80,6 +80,56 @@ final class RecipePlannerIOSUITests: XCTestCase {
         )
     }
 
+    /// Verifies the unauthenticated form remains available in portrait and a short landscape viewport.
+    @MainActor
+    func testLoginLayoutAdaptsToCompactAndWideLayouts() throws {
+        addTeardownBlock {
+            XCUIDevice.shared.orientation = .portrait
+        }
+
+        let emailField = app.textFields[RecipePlannerUITestIdentifiers.emailField]
+        let passwordField = app.secureTextFields[RecipePlannerUITestIdentifiers.passwordField]
+        let loginButton = app.buttons[RecipePlannerUITestIdentifiers.loginButton]
+
+        XCTAssertTrue(emailField.waitForExistence(timeout: 10), "The login form should load.")
+        XCTAssertTrue(passwordField.exists, "The password field should remain in the login form.")
+        XCTAssertTrue(loginButton.exists, "The login action should remain available.")
+        XCTAssertFalse(app.keyboards.firstMatch.exists, "The keyboard should open only after the user focuses a field.")
+        attachScreenshot(named: "Login portrait")
+
+        XCUIDevice.shared.orientation = .landscapeLeft
+        XCTAssertTrue(emailField.waitForExistence(timeout: 10), "The email field should survive rotation.")
+        XCTAssertTrue(passwordField.exists, "The password field should survive rotation.")
+        XCTAssertTrue(loginButton.exists, "The login action should survive rotation.")
+        XCTAssertEqual(XCUIDevice.shared.orientation, .landscapeLeft)
+
+        let loginScrollView = app.scrollViews.firstMatch
+        XCTAssertTrue(loginScrollView.exists, "The login content should remain scrollable in the shorter viewport.")
+        for _ in 0..<4 where !loginButton.isHittable {
+            loginScrollView.swipeUp()
+        }
+        XCTAssertTrue(loginButton.isHittable, "The login action should be reachable by scrolling in landscape.")
+        attachScreenshot(named: "Login landscape")
+
+        for _ in 0..<4 where !emailField.isHittable {
+            loginScrollView.swipeDown()
+        }
+        XCTAssertTrue(emailField.isHittable, "The email field should remain reachable after scrolling.")
+        emailField.tap()
+
+        let keyboardTipContinue = app.buttons["Continue"]
+        if keyboardTipContinue.exists {
+            keyboardTipContinue.tap()
+        }
+        XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 5), "Focusing Email should show the keyboard.")
+        attachScreenshot(named: "Login landscape with keyboard")
+
+        for _ in 0..<4 where !loginButton.isHittable {
+            loginScrollView.swipeUp()
+        }
+        XCTAssertTrue(loginButton.isHittable, "Scrolling with the keyboard open should make the login action reachable.")
+    }
+
     /// Testuje wydajność uruchamiania aplikacji.
     @MainActor
     func testLaunchPerformance() throws {
@@ -88,5 +138,13 @@ final class RecipePlannerIOSUITests: XCTestCase {
                 XCUIApplication().launch()
             }
         }
+    }
+
+    @MainActor
+    private func attachScreenshot(named name: String) {
+        let attachment = XCTAttachment(screenshot: app.screenshot())
+        attachment.name = name
+        attachment.lifetime = .keepAlways
+        add(attachment)
     }
 }

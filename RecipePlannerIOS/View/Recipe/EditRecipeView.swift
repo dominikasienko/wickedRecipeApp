@@ -127,18 +127,7 @@ struct EditRecipeView: View {
         ZStack {
             Color.darkBackground.ignoresSafeArea()
             
-            Ellipse()
-                .fill(Color.wickedGreen.opacity(0.4))
-                .frame(width: 300, height: 300)
-                .position(x: 50, y: 200)
-                .blur(radius: 100)
-                .ignoresSafeArea()
-            
-            Ellipse()
-                .fill(Color.glindaPink.opacity(0.3))
-                .frame(width: 250, height: 250)
-                .position(x: 350, y: 700)
-                .blur(radius: 80)
+            WickedAmbientGlowLayer(pinkOpacity: 0.3, greenOpacity: 0.4)
                 .ignoresSafeArea()
 
             List {
@@ -273,6 +262,7 @@ struct EditRecipeView: View {
             }
             .scrollContentBackground(.hidden)
             .listStyle(.grouped)
+            .wickedReadableWidth(900)
         }
         .navigationTitle("Edit Recipe")
         .navigationBarTitleDisplayMode(.inline)

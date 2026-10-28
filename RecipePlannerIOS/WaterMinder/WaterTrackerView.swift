@@ -157,26 +157,8 @@ private struct WickedBackgroundView: View {
                 endPoint: .bottomTrailing
             )
             .ignoresSafeArea()
-            
-            Ellipse()
-                .fill(Color.glindaPink.opacity(0.38))
-                .frame(width: 320, height: 320)
-                .position(x: 340, y: 70)
-                .blur(radius: 110)
-                .ignoresSafeArea()
-            
-            Ellipse()
-                .fill(Color.wickedGreen.opacity(0.33))
-                .frame(width: 260, height: 260)
-                .position(x: 35, y: 780)
-                .blur(radius: 95)
-                .ignoresSafeArea()
-            
-            Ellipse()
-                .fill(Color.wickedBlue.opacity(0.28))
-                .frame(width: 280, height: 280)
-                .position(x: 360, y: 720)
-                .blur(radius: 115)
+
+            WickedAmbientGlowLayer(pinkOpacity: 0.38, greenOpacity: 0.33, blueOpacity: 0.28)
                 .ignoresSafeArea()
         }
     }
@@ -607,7 +589,10 @@ struct WaterTrackerView: View {
     
     var body: some View {
         navigationScreen
-            .onAppear(perform: applyHydrationDefaults)
+            .onAppear {
+                applyHydrationDefaults()
+                waterManager.refreshCurrentDate()
+            }
             .onChange(of: hydrationFavoriteDrinkIDsRaw) { _, _ in
                 guard availableDrinkTypes.contains(selectedDrinkType) else {
                     selectedDrinkType = availableDrinkTypes.first ?? .water
@@ -690,6 +675,7 @@ struct WaterTrackerView: View {
 
             HydrationSourcesCard()
         }
+        .wickedReadableWidth(760)
     }
 
     private var drinkPicker: some View {

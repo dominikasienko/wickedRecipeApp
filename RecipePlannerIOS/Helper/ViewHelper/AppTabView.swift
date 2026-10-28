@@ -8,6 +8,9 @@
 import SwiftUI
 import FirebaseAuth
 import Observation
+#if canImport(UIKit)
+import UIKit
+#endif
 
 // MARK: - Enum Zakładek
 enum TabItem: String, CaseIterable {
@@ -74,6 +77,7 @@ struct AppTabView: View {
     @Environment(WaterManager.self) private var waterManager
     @Environment(RecipeManager.self) private var recipeManager
     @Environment(MealPlannerManager.self) private var mealPlanManager
+    @Environment(\.scenePhase) private var scenePhase
     
     @State private var selectedTab: TabItem = .home
     
@@ -87,8 +91,21 @@ struct AppTabView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .ignoresSafeArea(.container, edges: .bottom)
         }
-        .ignoresSafeArea(.keyboard, edges: .bottom)
         .preferredColorScheme(.dark)
+        .onAppear {
+            waterManager.refreshCurrentDate()
+        }
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active {
+                waterManager.refreshCurrentDate()
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .NSCalendarDayChanged)) { _ in
+            waterManager.refreshCurrentDate()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: UIApplication.significantTimeChangeNotification)) { _ in
+            waterManager.refreshCurrentDate()
+        }
     }
     
 // MARK: - Widoki Pomocnicze
@@ -123,34 +140,48 @@ struct AppTabView: View {
             Divider()
                 .background(Color.white.opacity(0.2))
 
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(alignment: .top, spacing: 20) {
-                    ForEach(TabItem.allCases, id: \.self) { tab in
-                        Button {
-                            selectedTab = tab
-                        } label: {
-                            VStack(spacing: 4) {
-                                Image(systemName: tab.iconName)
-                                    .font(.system(size: 22))
-
-                                Text(tab.localizedTitle)
-                                    .font(.system(size: 10))
-                            }
-                            .foregroundStyle(selectedTab == tab ? Color.glindaPink : .gray)
-                            .padding(.vertical, 8)
-                            .frame(minWidth: 60)
-                        }
-                        .accessibilityLabel(Text(tab.localizedTitle))
-                        .accessibilityIdentifier(tab.accessibilityIdentifier)
-                    }
-                }
-                .padding(.horizontal)
+            ViewThatFits(in: .horizontal) {
+                tabItems(showingTitles: true)
+                tabItems(showingTitles: false)
             }
-            .frame(height: 50)
+            .frame(height: 56)
             .accessibilityIdentifier("navigation.bar")
         }
         .padding(.bottom, iconBottomPadding)
         .background(.ultraThinMaterial)
         .background(Color.darkBackground.opacity(0.88))
+    }
+
+    private func tabItems(showingTitles: Bool) -> some View {
+        HStack(alignment: .center, spacing: showingTitles ? 16 : 0) {
+            ForEach(TabItem.allCases, id: \.self) { tab in
+                Button {
+                    selectedTab = tab
+                } label: {
+                    VStack(spacing: 4) {
+                        Image(systemName: tab.iconName)
+                            .font(.system(size: 22))
+
+                        if showingTitles {
+                            Text(tab.localizedTitle)
+                                .font(.caption2)
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.8)
+                        }
+                    }
+                    .foregroundStyle(selectedTab == tab ? Color.glindaPink : .gray)
+                    .padding(.vertical, 8)
+                    .frame(
+                        minWidth: showingTitles ? 60 : 44,
+                        maxWidth: showingTitles ? nil : .infinity,
+                        minHeight: 50
+                    )
+                    .contentShape(Rectangle())
+                }
+                .accessibilityLabel(Text(tab.localizedTitle))
+                .accessibilityIdentifier(tab.accessibilityIdentifier)
+            }
+        }
+        .padding(.horizontal, 8)
     }
 }

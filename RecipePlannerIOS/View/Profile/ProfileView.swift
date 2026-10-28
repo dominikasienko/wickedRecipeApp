@@ -60,18 +60,7 @@ struct ProfileView: View {
             ZStack {
                 Color.darkBackground.ignoresSafeArea()
                 
-                Ellipse()
-                    .fill(Color.glindaPink.opacity(0.4))
-                    .frame(width: 300, height: 300)
-                    .position(x: 350, y: 50)
-                    .blur(radius: 100)
-                    .ignoresSafeArea()
-                
-                Ellipse()
-                    .fill(Color.wickedGreen.opacity(0.3))
-                    .frame(width: 200, height: 200)
-                    .position(x: 50, y: 800)
-                    .blur(radius: 80)
+                WickedAmbientGlowLayer(pinkOpacity: 0.4, greenOpacity: 0.3)
                     .ignoresSafeArea()
 
                 if let profile = profileManager.userProfile {
@@ -149,6 +138,7 @@ struct ProfileView: View {
                     }
                     .scrollContentBackground(.hidden)
                     .listStyle(.insetGrouped)
+                    .wickedReadableWidth(820)
 
                 } else {
                     ContentUnavailableView("Loading profile...", systemImage: "person.circle")

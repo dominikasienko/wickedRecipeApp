@@ -41,6 +41,7 @@ struct LoginView: View {
                     .padding(.horizontal, 20)
                     .padding(.vertical, 28)
                 }
+                .scrollDismissesKeyboard(.interactively)
             }
             .navigationBarHidden(true)
             .sheet(isPresented: $showRegister) {
@@ -198,11 +199,6 @@ struct LoginView: View {
                 .stroke(Color.white.opacity(0.12), lineWidth: 1)
         )
         .shadow(color: .black.opacity(0.35), radius: 18, y: 8)
-        .onAppear {
-            if focusedField == nil {
-                focusedField = .email
-            }
-        }
     }
 
     private func loginField<Content: View>(

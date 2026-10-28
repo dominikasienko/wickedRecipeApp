@@ -60,17 +60,8 @@ struct RecipeDetailView: View {
         
         ZStack(alignment: .top) {
             darkBackground.ignoresSafeArea()
-            Ellipse()
-                .fill(wickedGreen.opacity(0.4))
-                .frame(width: 300, height: 300)
-                .position(x: 50, y: 200)
-                .blur(radius: 100)
-            
-            Ellipse()
-                .fill(glindaPink.opacity(0.3))
-                .frame(width: 250, height: 250)
-                .position(x: proxy.size.width - 50, y: proxy.size.height - 100)
-                .blur(radius: 80)
+            WickedAmbientGlowLayer(pinkOpacity: 0.3, greenOpacity: 0.4, pinkDiameter: 250)
+                .ignoresSafeArea()
             
             ScrollView(.vertical, showsIndicators: false) {
                 VStack(spacing: 0) {
@@ -101,8 +92,6 @@ struct RecipeDetailView: View {
                             .font(.system(.largeTitle, design: .serif))
                             .fontWeight(.bold)
                             .foregroundStyle(wickedGreen)
-                            .lineLimit(3)
-                            .minimumScaleFactor(0.8)
                             .fixedSize(horizontal: false, vertical: true)
                         
                         ViewThatFits {
@@ -179,6 +168,8 @@ struct RecipeDetailView: View {
                         )
                     }
                     .padding(25)
+                    .frame(maxWidth: 900)
+                    .frame(maxWidth: .infinity)
                     .background(.ultraThinMaterial)
                     .cornerRadius(25, corners: [.topLeft, .topRight])
                     .padding(.top, -50)

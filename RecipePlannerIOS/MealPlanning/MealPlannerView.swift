@@ -14,6 +14,7 @@ struct MealPlannerView: View {
     @Environment(ProfileManager.self) private var profileManager
     @Environment(AuthManager.self) private var authManager
     @Environment(\.locale) private var locale
+    @Environment(\.verticalSizeClass) private var verticalSizeClass
     @AppStorage("weekStartDay") private var weekStartDay: Int = 2
     
     @State private var currentMonthDate: Date = Date().startOfMonth
@@ -50,48 +51,18 @@ struct MealPlannerView: View {
         NavigationStack {
             ZStack {
                 Color.darkBackground.ignoresSafeArea()
-                
-                Ellipse()
-                    .fill(Color.wickedGreen.opacity(0.3))
-                    .frame(width: 300, height: 300)
-                    .position(x: 50, y: 100)
-                    .blur(radius: 100)
-                    .ignoresSafeArea()
-                
-                Ellipse()
-                    .fill(Color.glindaPink.opacity(0.2))
-                    .frame(width: 250, height: 250)
-                    .position(x: 300, y: 700)
-                    .blur(radius: 80)
+                WickedAmbientGlowLayer(pinkOpacity: 0.2, greenOpacity: 0.3, pinkDiameter: 250, greenDiameter: 300)
                     .ignoresSafeArea()
 
-                VStack(spacing: 0) {
-                    
-                    VStack {
-                        MonthHeader(currentMonthDate: $currentMonthDate)
-                        
-                        CalendarGrid(
-                            currentMonthDate: currentMonthDate,
-                            selectedDate: $selectedDate,
-                            entries: mealPlannerManager.allMealPlanEntries,
-                            firstWeekday: weekStartDay
-                        )
+                GeometryReader { geometry in
+                    Group {
+                        if geometry.size.width >= 720 {
+                            widePlannerLayout
+                        } else {
+                            compactPlannerLayout
+                        }
                     }
-                    .padding()
-                    .background(.ultraThinMaterial)
-                    .cornerRadius(20)
-                    .padding(.horizontal)
-                    
-                    DailyMealsSection(
-                        selectedDate: selectedDate,
-                        entries: entriesForDay,
-                        nutritionSummary: nutritionSummary
-                    )
-                    
-                    Button("Add Meal") { isShowingAddSheet = true }
-                        .buttonStyle(.borderedProminent)
-                        .tint(.wickedGreen) // STYL WICKED
-                        .padding(.bottom, 10)
+                    .frame(width: geometry.size.width, height: geometry.size.height)
                 }
             }
             .navigationTitle("Meal Plan")
@@ -123,6 +94,88 @@ struct MealPlannerView: View {
             }
         }
     }
+
+    private var calendarCard: some View {
+        VStack {
+            MonthHeader(currentMonthDate: $currentMonthDate)
+
+            CalendarGrid(
+                currentMonthDate: currentMonthDate,
+                selectedDate: $selectedDate,
+                entries: mealPlannerManager.allMealPlanEntries,
+                firstWeekday: weekStartDay
+            )
+        }
+        .padding()
+        .background(.ultraThinMaterial)
+        .cornerRadius(20)
+    }
+
+    private var addMealButton: some View {
+        Button("Add Meal") { isShowingAddSheet = true }
+            .buttonStyle(.borderedProminent)
+            .tint(.wickedGreen)
+            .padding(.bottom, 10)
+    }
+
+    private var compactPlannerLayout: some View {
+        Group {
+            if verticalSizeClass == .compact {
+                ScrollView { compactPlannerContent }
+            } else {
+                compactPlannerContent
+            }
+        }
+    }
+
+    private var compactPlannerContent: some View {
+        VStack(spacing: 0) {
+            calendarCard
+                .padding(.horizontal)
+
+            DailyMealsSection(
+                selectedDate: selectedDate,
+                entries: entriesForDay,
+                nutritionSummary: nutritionSummary,
+                usesOuterScrollView: verticalSizeClass == .compact
+            )
+
+            addMealButton
+        }
+        .wickedReadableWidth(760)
+    }
+
+    private var widePlannerLayout: some View {
+        Group {
+            if verticalSizeClass == .compact {
+                ScrollView { widePlannerContent(fillsHeight: false) }
+            } else {
+                widePlannerContent(fillsHeight: true)
+            }
+        }
+    }
+
+    private func widePlannerContent(fillsHeight: Bool) -> some View {
+        HStack(alignment: .top, spacing: 18) {
+            calendarCard
+                .frame(maxWidth: 360)
+
+            VStack(spacing: 0) {
+                DailyMealsSection(
+                    selectedDate: selectedDate,
+                    entries: entriesForDay,
+                    nutritionSummary: nutritionSummary,
+                    usesOuterScrollView: verticalSizeClass == .compact
+                )
+                .frame(maxHeight: fillsHeight ? .infinity : nil)
+
+                addMealButton
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+        .padding(.horizontal)
+        .wickedReadableWidth(1_280)
+    }
 }
 
 // MARK: - Komponenty Kalendarza
@@ -135,7 +188,9 @@ struct MonthHeader: View {
             Button(action: { changeMonth(by: -1) }) {
                 Image(systemName: "chevron.left")
                     .foregroundStyle(.white)
+                    .frame(minWidth: 44, minHeight: 44)
             }
+            .accessibilityLabel(Text("Previous month"))
             Text(currentMonthDate, format: .dateTime.month(.wide).year())
                 .font(.title2).bold()
                 .frame(maxWidth: .infinity)
@@ -144,7 +199,9 @@ struct MonthHeader: View {
             Button(action: { changeMonth(by: 1) }) {
                 Image(systemName: "chevron.right")
                     .foregroundStyle(.white)
+                    .frame(minWidth: 44, minHeight: 44)
             }
+            .accessibilityLabel(Text("Next month"))
         }
         .padding(.bottom, 10)
     }
@@ -209,14 +266,24 @@ struct CalendarGrid: View {
             LazyVGrid(columns: columns, spacing: 10) {
                 ForEach(days.indices, id: \.self) { index in
                     if let date = days[index] {
-                        DayCell(
-                            date: date,
-                            isSelected: date.isSameDay(as: selectedDate),
-                            hasMeal: entries.contains(where: { $0.date.isSameDay(as: date) }),
-                            isCurrentMonth: Calendar.current.isDate(date, equalTo: currentMonthDate, toGranularity: .month)
-                        )
-                        .onTapGesture { selectedDate = date }
-                    } else { Color.clear }
+                        Button {
+                            selectedDate = date
+                        } label: {
+                            DayCell(
+                                date: date,
+                                isSelected: date.isSameDay(as: selectedDate),
+                                hasMeal: entries.contains(where: { $0.date.isSameDay(as: date) }),
+                                isCurrentMonth: Calendar.current.isDate(date, equalTo: currentMonthDate, toGranularity: .month)
+                            )
+                            .frame(maxWidth: .infinity, minHeight: 44)
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel(Text(date, style: .date))
+                        .accessibilityAddTraits(date.isSameDay(as: selectedDate) ? .isSelected : [])
+                    } else {
+                        Color.clear.frame(minHeight: 44)
+                    }
                 }
             }
         }
@@ -255,6 +322,7 @@ private struct DailyMealsSection: View {
     let selectedDate: Date
     let entries: [MealPlanEntry]
     let nutritionSummary: DailyNutritionSummaryModel
+    let usesOuterScrollView: Bool
     
     var body: some View {
         VStack(alignment: .leading) {
@@ -264,31 +332,37 @@ private struct DailyMealsSection: View {
                 .padding(.horizontal)
                 .padding(.top, 20)
             
-            ScrollView {
-                VStack(spacing: 12) {
-                    if entries.isEmpty {
-                        ContentUnavailableView {
-                            Label("No meals planned", systemImage: "calendar.badge.exclamationmark")
-                        } description: {
-                            Text("Tap 'Add Meal' to schedule a recipe for this day.")
-                        }
-                        .foregroundStyle(.gray)
-                        .frame(maxWidth: .infinity)
-                        .padding(.top, 20)
-                    } else {
-                        ForEach(entries) { entry in
-                            MealCard(entry: entry)
-                        }
-                    }
-
-                    DailyNutritionSummaryCard(summary: nutritionSummary)
-                }
-                .padding(.horizontal)
-                .padding(.top, 10)
-                .padding(.bottom, 20)
+            if usesOuterScrollView {
+                mealRows
+            } else {
+                ScrollView { mealRows }
             }
         }
-        .frame(maxHeight: .infinity)
+        .frame(maxHeight: usesOuterScrollView ? nil : .infinity)
+    }
+
+    private var mealRows: some View {
+        VStack(spacing: 12) {
+            if entries.isEmpty {
+                ContentUnavailableView {
+                    Label("No meals planned", systemImage: "calendar.badge.exclamationmark")
+                } description: {
+                    Text("Tap 'Add Meal' to schedule a recipe for this day.")
+                }
+                .foregroundStyle(.gray)
+                .frame(maxWidth: .infinity)
+                .padding(.top, 20)
+            } else {
+                ForEach(entries) { entry in
+                    MealCard(entry: entry)
+                }
+            }
+
+            DailyNutritionSummaryCard(summary: nutritionSummary)
+        }
+        .padding(.horizontal)
+        .padding(.top, 10)
+        .padding(.bottom, 20)
     }
 }
 
@@ -790,11 +864,7 @@ struct AddMealSheet: View {
         ZStack {
             Color.darkBackground.ignoresSafeArea()
             
-            Ellipse()
-                .fill(Color.wickedGreen.opacity(0.3))
-                .frame(width: 200, height: 200)
-                .position(x: 50, y: 100)
-                .blur(radius: 80)
+            WickedAmbientGlowLayer(pinkOpacity: 0, greenOpacity: 0.3, greenDiameter: 200)
                 .ignoresSafeArea()
 
             VStack {
@@ -1017,6 +1087,7 @@ struct AddMealSheet: View {
                     .disabled(selectedRecipe == nil)
                     .padding()
             }
+            .wickedReadableWidth(760)
         }
         .onAppear {
             let normalized = AppOptionCatalog.canonicalValue(

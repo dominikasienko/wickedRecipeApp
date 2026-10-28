@@ -345,36 +345,30 @@ struct SeasonalCalendarView: View {
         ZStack {
             Color.darkBackground.ignoresSafeArea()
 
-            Ellipse()
-                .fill(Color.wickedGreen.opacity(0.32))
-                .frame(width: 320, height: 320)
-                .position(x: 40, y: 120)
-                .blur(radius: 110)
-                .ignoresSafeArea()
-
-            Ellipse()
-                .fill(Color.glindaPink.opacity(0.22))
-                .frame(width: 260, height: 260)
-                .position(x: 340, y: 760)
-                .blur(radius: 90)
+            WickedAmbientGlowLayer(pinkOpacity: 0.22, greenOpacity: 0.32, pinkDiameter: 260, greenDiameter: 320)
                 .ignoresSafeArea()
 
             ScrollView {
-                VStack(alignment: .leading, spacing: 18) {
+                VStack(alignment: .center, spacing: 18) {
                     SeasonalHeroCard()
+                        .wickedReadableWidth(1_000)
 
-                    ForEach(months) { month in
-                        NavigationLink {
-                            SeasonalMonthDetailView(month: month)
-                        } label: {
-                            SeasonalMonthCard(month: month)
+                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 300, maximum: 460), spacing: 18)], spacing: 18) {
+                        ForEach(months) { month in
+                            NavigationLink {
+                                SeasonalMonthDetailView(month: month)
+                            } label: {
+                                SeasonalMonthCard(month: month)
+                            }
+                            .buttonStyle(.plain)
                         }
-                        .buttonStyle(.plain)
                     }
+                    .wickedReadableWidth(1_200)
                 }
                 .padding(.horizontal)
                 .padding(.top, 16)
                 .padding(.bottom, 28)
+                .wickedReadableWidth(1_200)
             }
         }
         .navigationTitle("Seasonal Calendar")
@@ -540,6 +534,7 @@ private struct SeasonalMonthDetailView: View {
                 }
                 .padding()
                 .padding(.bottom, 30)
+                .wickedReadableWidth(900)
             }
         }
         .navigationTitle(LocalizedStringKey(month.title))

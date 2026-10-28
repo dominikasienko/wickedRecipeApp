@@ -104,6 +104,7 @@ struct HomeView: View {
             .safeAreaInset(edge: .top, spacing: 0) {
                 activeTopBar
             }
+            .wickedReadableWidth(1_200)
         }
         .task {
             guard let userId = authManager.user?.uid else { return }
@@ -607,7 +608,7 @@ struct AllRecipesSection: View {
                 .padding()
                 .foregroundStyle(.secondary)
             } else {
-                let columns: [GridItem] = [GridItem(.flexible())]
+                let columns: [GridItem] = [GridItem(.adaptive(minimum: 280, maximum: 380), spacing: 20)]
 
                 LazyVGrid(columns: columns, spacing: 20) {
                     ForEach(recipes) { recipe in
@@ -621,6 +622,7 @@ struct AllRecipesSection: View {
                     }
                 }
                 .padding(.horizontal)
+                .wickedReadableWidth(1_200)
             }
         }
     }

@@ -16,13 +16,14 @@ struct WaterHistoryView: View {
     }
 
     private var allEntries: [WaterEntry] {
-        waterManager.allRecords.flatMap { $0.entries }
+        WaterIntakeDay.entries(in: waterManager.allRecords)
     }
 
     private var totalHistoricalBeverageVolume: Double {
         let calendar = Calendar.current
+        let currentDate = waterManager.currentDate
         let historicalLogs = allEntries.filter { entry in
-            !calendar.isDateInToday(entry.timestamp)
+            !calendar.isDate(entry.timestamp, inSameDayAs: currentDate)
         }
         return historicalLogs.reduce(0) { $0 + $1.amountMl }
     }
@@ -41,11 +42,7 @@ struct WaterHistoryView: View {
         ZStack {
             Color.darkBackground.ignoresSafeArea()
             
-            Ellipse()
-                .fill(Color.glindaPink.opacity(0.4))
-                .frame(width: 300, height: 300)
-                .position(x: 350, y: 50)
-                .blur(radius: 100)
+            WickedAmbientGlowLayer(pinkOpacity: 0.4, greenOpacity: 0)
                 .ignoresSafeArea()
             
             ScrollView {
@@ -81,6 +78,7 @@ struct WaterHistoryView: View {
                     }
                     .padding(.horizontal)
                 }
+                .wickedReadableWidth(760)
             }
         }
         .navigationTitle("Hydration History")
