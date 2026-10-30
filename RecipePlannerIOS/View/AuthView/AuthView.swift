@@ -154,12 +154,10 @@ struct AuthView: View {
                 let newWaterManager = WaterManager(userId: userID)
                 let newMealPlanManager = MealPlannerManager(userId: userID)
                 try await profileManager.fetchUserProfile(userId: userID)
-                guard let profile = profileManager.userProfile else {
+                guard profileManager.userProfile != nil else {
                     throw NSError(domain: "AuthViewError", code: 1)
                 }
                 try await recipeManager.fetchUserRecipes(userId: userID)
-                newWaterManager.calculateGoal(profile: profile)
-
                 waterManager = newWaterManager
                 mealPlanManager = newMealPlanManager
                 loadedUserID = userID

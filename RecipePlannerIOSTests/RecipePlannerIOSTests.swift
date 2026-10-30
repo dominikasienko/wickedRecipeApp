@@ -89,11 +89,11 @@ final class RecipePlannerIOSTests: XCTestCase {
 
         let age100 = makeProfile(age: 100, sex: "woman", activity: "inactive", weight: 65, height: 165)
         XCTAssertNotNil(age100.calculateEstimatedEnergyRequirementKcal())
-        XCTAssertEqual(age100.calculateWaterGoalMl(), 2_000)
+        XCTAssertEqual(age100.hydrationAssessment()?.efsaReference?.totalWaterMlPerDay, 2_000)
 
         let age101 = makeProfile(age: 101, sex: "woman", activity: "inactive", weight: 65, height: 165)
         XCTAssertNil(age101.calculateEstimatedEnergyRequirementKcal())
-        XCTAssertNil(age101.calculateWaterGoalMl())
+        XCTAssertNil(age101.hydrationAssessment())
     }
 
     func testEnergyEstimateRecalculatesFromCurrentProfileValues() throws {
@@ -134,19 +134,19 @@ final class RecipePlannerIOSTests: XCTestCase {
     func testUnsupportedOrIneligibleProfilesDoNotReceivePersonalizedTargets() {
         let unsupported = makeProfile(age: 30, sex: "other", activity: "active", weight: 70, height: 175)
         XCTAssertNil(unsupported.calculateEstimatedEnergyRequirementKcal())
-        XCTAssertNil(unsupported.calculateWaterGoalMl())
+        XCTAssertNil(unsupported.hydrationAssessment()?.efsaReference)
 
         var notOptedIn = makeProfile(age: 30, sex: "woman", activity: "active", weight: 65, height: 165)
         notOptedIn.canUseGeneralEstimates = false
         XCTAssertNil(notOptedIn.calculateEstimatedEnergyRequirementKcal())
-        XCTAssertNil(notOptedIn.calculateWaterGoalMl())
+        XCTAssertNil(notOptedIn.hydrationAssessment())
 
         notOptedIn.canUseGeneralEstimates = nil
         XCTAssertNil(notOptedIn.calculateEstimatedEnergyRequirementKcal(), "Migrated profiles without an explicit opt-in remain ineligible.")
 
         let emptyProfile = UserProfile.empty(userId: "new-user")
         XCTAssertNil(emptyProfile.calculateEstimatedEnergyRequirementKcal())
-        XCTAssertNil(emptyProfile.calculateWaterGoalMl())
+        XCTAssertNil(emptyProfile.hydrationAssessment())
     }
 
     func testInvalidAgeOrMeasurementsDoNotProduceEnergyEstimate() {
@@ -176,7 +176,7 @@ final class RecipePlannerIOSTests: XCTestCase {
         XCTAssertNotNil(profile.calculateEstimatedEnergyRequirementKcal())
         profile.healthDataConsentAt = nil
         XCTAssertNil(profile.calculateEstimatedEnergyRequirementKcal())
-        XCTAssertNil(profile.calculateWaterGoalMl())
+        XCTAssertNil(profile.hydrationAssessment())
     }
 
     func testProfileImageEditStatePreservesReplacesAndRemovesExplicitly() throws {
@@ -229,16 +229,222 @@ final class RecipePlannerIOSTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(Date().timeIntervalSince(start), 0.04)
     }
 
-    func testEFSAWaterReferenceIsNotModifiedByWeightActivityOrDiet() throws {
+    func testEFSAWaterReferenceIsSeparateFromWeightActivityAndDietEstimates() throws {
         let woman = makeProfile(age: 30, sex: "woman", activity: "inactive", weight: 50, height: 160)
         var changedInputs = woman
         changedInputs.weight = 120
         changedInputs.activityLevel = "veryActive"
         changedInputs.selectedDiets = ["highProtein", "highFiber", "vegan"]
 
-        XCTAssertEqual(woman.calculateWaterGoalMl(), 2_000)
-        XCTAssertEqual(changedInputs.calculateWaterGoalMl(), 2_000)
-        XCTAssertEqual(makeProfile(age: 30, sex: "man", activity: "active", weight: 70, height: 175).calculateWaterGoalMl(), 2_500)
+        XCTAssertEqual(woman.hydrationAssessment()?.efsaReference?.totalWaterMlPerDay, 2_000)
+        XCTAssertEqual(changedInputs.hydrationAssessment()?.efsaReference?.totalWaterMlPerDay, 2_000)
+        XCTAssertEqual(
+            makeProfile(age: 30, sex: "man", activity: "active", weight: 70, height: 175)
+                .hydrationAssessment()?.efsaReference?.totalWaterMlPerDay,
+            2_500
+        )
+    }
+
+    func testEFSAWaterReferenceValuesAndSupportedLifeStageAdjustments() throws {
+        XCTAssertEqual(HydrationCalculationService.efsaReference(sex: .female)?.totalWaterMlPerDay, 2_000)
+        XCTAssertEqual(HydrationCalculationService.efsaReference(sex: .male)?.totalWaterMlPerDay, 2_500)
+
+        let pregnancy = try XCTUnwrap(
+            HydrationCalculationService.efsaReference(sex: .female, lifeStage: .pregnancy)
+        )
+        let lactation = try XCTUnwrap(
+            HydrationCalculationService.efsaReference(sex: .female, lifeStage: .lactation)
+        )
+        XCTAssertEqual(pregnancy.totalWaterMlPerDay, 2_300)
+        if case .pregnancy = pregnancy.lifeStage {
+            // Expected life stage.
+        } else {
+            XCTFail("Pregnancy adjustment should retain its life-stage provenance.")
+        }
+        XCTAssertEqual(lactation.totalWaterMlPerDay, 2_700)
+        if case .lactation = lactation.lifeStage {
+            // Expected life stage.
+        } else {
+            XCTFail("Lactation adjustment should retain its life-stage provenance.")
+        }
+        XCTAssertNil(HydrationCalculationService.efsaReference(sex: .male, lifeStage: .pregnancy))
+        XCTAssertNil(HydrationCalculationService.efsaReference(sex: .male, lifeStage: .lactation))
+    }
+
+    func testWeightBasedFluidEstimateUsesThirtyMlPerKgFor60To80Kg() throws {
+        let expected: [(weight: Double, milliliters: Double)] = [
+            (60, 1_800),
+            (70, 2_100),
+            (80, 2_400)
+        ]
+
+        for item in expected {
+            let profile = makeProfile(
+                age: 30,
+                sex: "woman",
+                activity: "inactive",
+                weight: item.weight,
+                height: 180
+            )
+            let estimate = try XCTUnwrap(profile.hydrationAssessment()?.dailyFluidEstimate)
+            XCTAssertEqual(estimate.estimatedMlPerDay, item.milliliters)
+            XCTAssertEqual(estimate.weightKgUsed, item.weight)
+            if case .currentBodyWeight = estimate.weightSource {
+                // Current weight is appropriate below BMI 25.
+            } else {
+                XCTFail("Expected the current body weight to be used for \(item.weight) kg.")
+            }
+        }
+    }
+
+    func testOverweightFluidEstimateRequiresAValidProvidedReferenceWeight() throws {
+        var profile = makeProfile(age: 30, sex: "woman", activity: "inactive", weight: 100, height: 170)
+        var assessment = try XCTUnwrap(profile.hydrationAssessment())
+        XCTAssertNil(assessment.dailyFluidEstimate)
+        XCTAssertEqual(assessment.fluidEstimateUnavailableReason, .referenceWeightRequiredForBMI25OrHigher)
+
+        profile.referenceWeightKg = 75
+        assessment = try XCTUnwrap(profile.hydrationAssessment())
+        let estimate = try XCTUnwrap(assessment.dailyFluidEstimate)
+        XCTAssertEqual(estimate.estimatedMlPerDay, 2_250)
+        XCTAssertEqual(estimate.weightKgUsed, 75)
+        if case .providedReferenceWeight = estimate.weightSource {
+            // The supplied reference weight is used for BMI 25 or higher.
+        } else {
+            XCTFail("Expected the supplied reference weight to be used.")
+        }
+
+        for invalidReferenceWeight in [0, -1, 29.9, 100, 301, .nan, .infinity] {
+            profile.referenceWeightKg = invalidReferenceWeight
+            let invalidAssessment = try XCTUnwrap(profile.hydrationAssessment())
+            XCTAssertNil(invalidAssessment.dailyFluidEstimate, "Invalid reference weight: \(invalidReferenceWeight)")
+            XCTAssertEqual(invalidAssessment.fluidEstimateUnavailableReason, .validReferenceWeightRequired)
+        }
+    }
+
+    func testInvalidBodyMeasurementsDoNotProduceWeightBasedFluidEstimate() throws {
+        var profile = makeProfile(age: 30, sex: "woman", activity: "inactive", weight: 70, height: 175)
+
+        for invalidWeight in [0, -1, 29.9, 300.1, .nan, .infinity] {
+            profile.weight = invalidWeight
+            let assessment = try XCTUnwrap(profile.hydrationAssessment())
+            XCTAssertNil(assessment.dailyFluidEstimate, "Invalid current weight: \(invalidWeight)")
+            XCTAssertEqual(assessment.fluidEstimateUnavailableReason, .validHeightAndWeightRequired)
+        }
+
+        profile.weight = 70
+        for invalidHeight in [0, -1, 119.9, 250.1, .nan, .infinity] {
+            profile.height = invalidHeight
+            let assessment = try XCTUnwrap(profile.hydrationAssessment())
+            XCTAssertNil(assessment.dailyFluidEstimate, "Invalid height: \(invalidHeight)")
+            XCTAssertEqual(assessment.fluidEstimateUnavailableReason, .validHeightAndWeightRequired)
+        }
+    }
+
+    func testAdolescentReceivesEFSAReferenceButNoAdultWeightEstimate() throws {
+        let profile = makeProfile(age: 16, sex: "woman", activity: "active", weight: 55, height: 165)
+        let assessment = try XCTUnwrap(profile.hydrationAssessment())
+
+        XCTAssertEqual(assessment.efsaReference?.totalWaterMlPerDay, 2_000)
+        XCTAssertNil(assessment.dailyFluidEstimate)
+        XCTAssertEqual(assessment.fluidEstimateUnavailableReason, .adultEstimateOnly)
+    }
+
+    func testHydrationAssessmentRecalculatesWithProfileChangesWithoutActivityMultiplier() throws {
+        var profile = makeProfile(age: 30, sex: "woman", activity: "inactive", weight: 70, height: 180)
+        let initial = try XCTUnwrap(profile.hydrationAssessment())
+
+        profile.activityLevel = "veryActive"
+        let changedActivity = try XCTUnwrap(profile.hydrationAssessment())
+        XCTAssertEqual(changedActivity.dailyFluidEstimate?.estimatedMlPerDay, initial.dailyFluidEstimate?.estimatedMlPerDay)
+        XCTAssertEqual(changedActivity.efsaReference?.totalWaterMlPerDay, initial.efsaReference?.totalWaterMlPerDay)
+
+        profile.weight = 72
+        let changedWeight = try XCTUnwrap(profile.hydrationAssessment())
+        XCTAssertEqual(changedWeight.dailyFluidEstimate?.estimatedMlPerDay, 2_160)
+
+        profile.gender = "man"
+        let changedReferenceCategory = try XCTUnwrap(profile.hydrationAssessment())
+        XCTAssertEqual(changedReferenceCategory.efsaReference?.totalWaterMlPerDay, 2_500)
+        XCTAssertEqual(changedReferenceCategory.dailyFluidEstimate?.estimatedMlPerDay, 2_160)
+    }
+
+    func testExerciseHydrationEstimateUsesMeasuredSessionInputs() throws {
+        let input = ExerciseHydrationInput(
+            preExerciseWeightKg: 70,
+            postExerciseWeightKg: 69.5,
+            durationMinutes: 60,
+            fluidConsumedMl: 500,
+            urineOutputMl: 100
+        )
+        let estimate = try XCTUnwrap(ExerciseHydrationCalculator.estimate(from: input))
+
+        XCTAssertEqual(estimate.estimatedSweatLossLiters, 0.9, accuracy: 0.0001)
+        XCTAssertEqual(estimate.estimatedSweatRateLitersPerHour, 0.9, accuracy: 0.0001)
+        XCTAssertEqual(estimate.bodyMassLossLiters, 0.5, accuracy: 0.0001)
+        XCTAssertEqual(estimate.recoveryFluidRangeMl?.lowerBound, 500)
+        XCTAssertEqual(estimate.recoveryFluidRangeMl?.upperBound, 600)
+
+        let shorterSession = ExerciseHydrationInput(
+            preExerciseWeightKg: 70,
+            postExerciseWeightKg: 69.5,
+            durationMinutes: 30,
+            fluidConsumedMl: 500,
+            urineOutputMl: 100
+        )
+        XCTAssertEqual(
+            try XCTUnwrap(ExerciseHydrationCalculator.estimate(from: shorterSession)).estimatedSweatRateLitersPerHour,
+            1.8,
+            accuracy: 0.0001
+        )
+    }
+
+    func testExerciseHydrationAccountsForFluidAndUrineAndOnlyShowsRecoveryWithMassLoss() throws {
+        let input = ExerciseHydrationInput(
+            preExerciseWeightKg: 70,
+            postExerciseWeightKg: 70,
+            durationMinutes: 30,
+            fluidConsumedMl: 250,
+            urineOutputMl: 50
+        )
+        let estimate = try XCTUnwrap(ExerciseHydrationCalculator.estimate(from: input))
+        XCTAssertEqual(estimate.estimatedSweatLossLiters, 0.2, accuracy: 0.0001)
+        XCTAssertEqual(estimate.estimatedSweatRateLitersPerHour, 0.4, accuracy: 0.0001)
+        XCTAssertNil(estimate.recoveryFluidRangeMl)
+
+        let noPositiveSweatLoss = ExerciseHydrationInput(
+            preExerciseWeightKg: 70,
+            postExerciseWeightKg: 70,
+            durationMinutes: 30,
+            fluidConsumedMl: 0,
+            urineOutputMl: 100
+        )
+        XCTAssertNil(ExerciseHydrationCalculator.estimate(from: noPositiveSweatLoss))
+    }
+
+    func testExerciseHydrationRejectsInvalidOrIncompleteInputs() {
+        let valid = ExerciseHydrationInput(
+            preExerciseWeightKg: 70,
+            postExerciseWeightKg: 69.5,
+            durationMinutes: 60,
+            fluidConsumedMl: 0,
+            urineOutputMl: 0
+        )
+        XCTAssertNotNil(ExerciseHydrationCalculator.estimate(from: valid))
+
+        let invalidInputs = [
+            ExerciseHydrationInput(preExerciseWeightKg: 70, postExerciseWeightKg: 69, durationMinutes: 0, fluidConsumedMl: 0, urineOutputMl: 0),
+            ExerciseHydrationInput(preExerciseWeightKg: 70, postExerciseWeightKg: 69, durationMinutes: -1, fluidConsumedMl: 0, urineOutputMl: 0),
+            ExerciseHydrationInput(preExerciseWeightKg: 70, postExerciseWeightKg: 69, durationMinutes: 60, fluidConsumedMl: -1, urineOutputMl: 0),
+            ExerciseHydrationInput(preExerciseWeightKg: 70, postExerciseWeightKg: 69, durationMinutes: 60, fluidConsumedMl: 0, urineOutputMl: -1),
+            ExerciseHydrationInput(preExerciseWeightKg: .nan, postExerciseWeightKg: 69, durationMinutes: 60, fluidConsumedMl: 0, urineOutputMl: 0),
+            ExerciseHydrationInput(preExerciseWeightKg: 70, postExerciseWeightKg: .infinity, durationMinutes: 60, fluidConsumedMl: 0, urineOutputMl: 0),
+            ExerciseHydrationInput(preExerciseWeightKg: 29, postExerciseWeightKg: 28, durationMinutes: 60, fluidConsumedMl: 0, urineOutputMl: 0)
+        ]
+
+        for input in invalidInputs {
+            XCTAssertNil(ExerciseHydrationCalculator.estimate(from: input))
+        }
     }
 
     func testAdultMacroGuidanceUsesAMDRRangesNotSingleTargets() throws {

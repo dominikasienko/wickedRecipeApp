@@ -166,8 +166,7 @@ private struct WickedBackgroundView: View {
 
 private struct GoalGlassCard: View {
     let currentBeverageVolume: Double
-    let goal: Double?
-    let progress: Double
+    let assessment: HydrationAssessment?
     
     var body: some View {
         VStack(spacing: 7) {
@@ -175,16 +174,46 @@ private struct GoalGlassCard: View {
                 .font(.headline)
                 .foregroundStyle(.white)
             
-            if let goal, goal > 0 {
-                Text(AppLocalization.key("EFSA total-water reference: \(Int(goal)) ml/day"))
-                    .font(.subheadline)
-                    .foregroundStyle(.white.opacity(0.82))
+            if let assessment {
+                if let estimate = assessment.dailyFluidEstimate {
+                    Text(AppLocalization.key("Approximate minimum fluid estimate (NCEŻ, 30 ml/kg)"))
+                        .font(.subheadline)
+                        .foregroundStyle(.white.opacity(0.82))
+                    Text("\(Int((estimate.estimatedMlPerDay / 100).rounded() * 100)) ml/day")
+                        .font(.title3.weight(.semibold))
+                        .foregroundStyle(Color.wickedGreen)
+                    HStack {
+                        Text(estimate.weightSource == .currentBodyWeight
+                             ? AppLocalization.key("Weight used")
+                             : AppLocalization.key("Reference weight advised by a specialist"))
+                        Spacer()
+                        Text(estimate.weightKgUsed, format: .number.precision(.fractionLength(1)))
+                        Text(verbatim: " kg")
+                    }
+                    .font(.caption)
+                    .foregroundStyle(.white.opacity(0.72))
+                    Text(AppLocalization.key("Logged beverages are compared with this approximate minimum. Water from food is not tracked."))
+                        .font(.footnote)
+                        .foregroundStyle(.white.opacity(0.76))
+                } else if assessment.fluidEstimateUnavailableReason == .referenceWeightRequiredForBMI25OrHigher {
+                    Text(AppLocalization.key("At BMI 25 or higher, this estimate needs an appropriate reference weight advised by a clinician or dietitian. Add it in Edit Profile; otherwise no weight-based estimate is shown."))
+                        .font(.footnote)
+                        .foregroundStyle(Color.glindaPink)
+                } else if assessment.fluidEstimateUnavailableReason == .adultEstimateOnly {
+                    Text(AppLocalization.key("The NCEŻ 30 ml/kg estimate is shown only for adults. The EFSA reference is separate."))
+                        .font(.footnote)
+                        .foregroundStyle(.white.opacity(0.75))
+                } else {
+                    Text(AppLocalization.key("A weight-based fluid estimate is unavailable for the current profile. You can still log beverages."))
+                        .font(.footnote)
+                        .foregroundStyle(.white.opacity(0.75))
+                }
 
-                Text(progress >= 1.0
-                     ? AppLocalization.key("Logged drinks reached the reference; food water is not counted.")
-                     : AppLocalization.key("Progress compares logged drinks with a total-water reference."))
-                    .font(.footnote.weight(.semibold))
-                    .foregroundStyle(Color.glindaPink)
+                if let reference = assessment.efsaReference {
+                    Text(AppLocalization.key("EFSA total-water reference: \(Int(reference.totalWaterMlPerDay)) ml/day (includes food and all drinks)"))
+                        .font(.caption)
+                        .foregroundStyle(.white.opacity(0.68))
+                }
             } else {
                 Text(AppLocalization.key("No general water reference is available for this profile. You can still log beverages."))
                     .font(.footnote)
@@ -205,11 +234,11 @@ private struct GoalGlassCard: View {
 private struct ProgressMilestonesCard: View {
     let progress: Double
     let tint: Color
-    private let milestones: [Double] = [0.25, 0.5, 0.75, 1.0, 1.25]
+    private let milestones: [Double] = [0.25, 0.5, 0.75, 1.0]
     
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text(AppLocalization.key("Beverage volume vs total-water reference"))
+            Text(AppLocalization.key("Logged beverages vs approximate NCEŻ minimum"))
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(.white.opacity(0.9))
             
@@ -230,7 +259,7 @@ private struct ProgressMilestonesCard: View {
             }
             
             GeometryReader { geometry in
-                let clamped = min(max(progress, 0.0), 1.25) / 1.25
+                let clamped = min(max(progress, 0.0), 1.0)
                 ZStack(alignment: .leading) {
                     Capsule()
                         .fill(Color.white.opacity(0.12))
@@ -433,45 +462,40 @@ private struct LastDrinkBadge: View {
 }
 
 private struct HydrationSourcesCard: View {
-    private let references = HydrationDrinkCatalog.references
-    
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(AppLocalization.key("About the water reference"))
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(.white.opacity(0.86))
 
-            Text(AppLocalization.key("EFSA adequate intakes are total water from all beverages and food moisture. This tracker counts only drinks you log."))
+            Text(AppLocalization.key("NCEŻ describes 30 ml/kg as a simple minimum estimate for fluid intake. It is not an EFSA formula or an exact individual requirement. The tracker compares recorded beverages with this estimate when current weight is appropriate."))
                 .font(.caption2)
                 .foregroundStyle(.white.opacity(0.72))
 
-            Text(AppLocalization.key("The reference assumes moderate temperature and activity. It is not adjusted for heat, intense exercise, pregnancy, breastfeeding, or medical fluid restrictions."))
+            Text(AppLocalization.key("EFSA provides a separate population reference for total water from all drinks and food moisture under moderate temperature and activity. This tracker records beverages only and does not measure water from food."))
                 .font(.caption2)
                 .foregroundStyle(.white.opacity(0.72))
 
-            Text(AppLocalization.key("Every drink is counted by its logged volume. Evidence does not support the precise per-drink hydration percentages previously shown."))
+            Text(AppLocalization.key("Activity categories do not add a fixed amount. Exercise and heat-related losses vary with duration, intensity, temperature, humidity and the individual. The session calculator uses measured session data and does not change the everyday estimate. Follow clinical advice if you have a fluid restriction or a condition affecting fluid balance."))
                 .font(.caption2)
                 .foregroundStyle(.white.opacity(0.72))
-            
-            ForEach(references.prefix(3)) { reference in
-                Link(destination: reference.url) {
-                    HStack(alignment: .top, spacing: 6) {
-                        Image(systemName: "link")
-                            .font(.caption2)
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(reference.title)
-                            Text(reference.detail)
-                        }
-                        .font(.caption2)
-                        .multilineTextAlignment(.leading)
-                    }
-                    .foregroundStyle(.white.opacity(0.7))
-                }
-            }
+
+            referenceLink("EFSA total-water adequate intake (2010)", url: "https://efsa.onlinelibrary.wiley.com/doi/10.2903/j.efsa.2010.1459")
+            referenceLink("NCEŻ fluid estimate (30 ml/kg)", url: "https://ncez.pzh.gov.pl/abc-zywienia/plynne-kalorie-czy-moga-zaburzac-bilans-energetyczny-organizmu/")
+            referenceLink("IOC exercise and heat hydration consensus", url: "https://bjsm.bmj.com/content/57/1/8")
+            referenceLink("National Academies water reference", url: "https://www.nationalacademies.org/read/10925/chapter/6")
         }
         .padding(12)
         .background(Color.white.opacity(0.06))
         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+    }
+
+    private func referenceLink(_ title: LocalizedStringKey, url: String) -> some View {
+        Link(destination: URL(string: url)!) {
+            Label(title, systemImage: "link")
+                .font(.caption2)
+                .foregroundStyle(.white.opacity(0.72))
+        }
     }
 }
 
@@ -491,6 +515,7 @@ struct WaterTrackerView: View {
     @State private var selectedMilkChoice: MilkChoice = .regular
     @State private var selectedAmount: Double = 250
     @State private var showingLogError = false
+    @State private var showingExerciseCalculator = false
     @State private var logErrorMessage: LocalizedStringKey?
     
     private var selectedCharacter: WickedCharacter {
@@ -539,14 +564,9 @@ struct WaterTrackerView: View {
     }
     
     private var displayGoal: WaterGoal {
-        if let goal = waterManager.goal {
-            return goal
-        }
-        
-        let currentVolume = waterManager.todayRecord?.totalVolumeML ?? 0.0
         return WaterGoal(
-            dailyGoalMl: profileManager.userProfile?.calculateWaterGoalMl(),
-            currentBeverageVolumeMl: currentVolume
+            assessment: profileManager.userProfile?.hydrationAssessment(),
+            currentBeverageVolumeMl: waterManager.todayTotalVolumeMl
         )
     }
     
@@ -626,6 +646,9 @@ struct WaterTrackerView: View {
                 .navigationTitle("Hydration Tracker")
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar { trackerToolbar }
+                .sheet(isPresented: $showingExerciseCalculator) {
+                    ExerciseHydrationCalculatorView()
+                }
         }
     }
 
@@ -642,9 +665,10 @@ struct WaterTrackerView: View {
 
     private var trackerSections: some View {
         let goal = displayGoal
-        let rawProgress = goal.dailyGoalMl.map { goal.currentBeverageVolumeMl / $0 } ?? 0
+        let estimatedFluids = goal.assessment?.dailyFluidEstimate?.estimatedMlPerDay
+        let rawProgress = estimatedFluids.map { goal.currentBeverageVolumeMl / $0 } ?? 0
         let characterProgress = min(max(rawProgress, 0.0), 1.0)
-        let milestoneProgress = min(max(rawProgress, 0.0), 1.25)
+        let milestoneProgress = min(max(rawProgress, 0.0), 1.0)
 
         return VStack(spacing: 14) {
             WickedCharacterTracker(
@@ -659,15 +683,37 @@ struct WaterTrackerView: View {
 
             GoalGlassCard(
                 currentBeverageVolume: goal.currentBeverageVolumeMl,
-                goal: goal.dailyGoalMl,
-                progress: rawProgress
+                assessment: goal.assessment
             )
 
-            if goal.dailyGoalMl != nil {
+            if estimatedFluids != nil {
                 ProgressMilestonesCard(progress: milestoneProgress, tint: activeLiquidColor)
             }
 
             drinkPicker
+
+            Button {
+                showingExerciseCalculator = true
+            } label: {
+                HStack(spacing: 12) {
+                    Image(systemName: "figure.run")
+                        .foregroundStyle(Color.wickedGreen)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(AppLocalization.key("Exercise recovery estimate"))
+                            .font(.headline)
+                        Text(AppLocalization.key("Estimate sweat loss from measured session data. This does not change your daily estimate."))
+                            .font(.caption)
+                            .multilineTextAlignment(.leading)
+                            .foregroundStyle(.white.opacity(0.72))
+                    }
+                    Spacer(minLength: 12)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(14)
+                .background(Color.white.opacity(0.07), in: RoundedRectangle(cornerRadius: 14))
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("hydration.exerciseCalculator")
 
             if let lastLog = waterManager.todayEntries.first {
                 LastDrinkBadge(entry: lastLog, waterColor: selectedCharacter.waterColor)

@@ -166,6 +166,6 @@ enum WaterIntakeDay {
 }
 
 struct WaterGoal {
-    var dailyGoalMl: Double?
+    var assessment: HydrationAssessment?
     var currentBeverageVolumeMl: Double = 0.0
 }

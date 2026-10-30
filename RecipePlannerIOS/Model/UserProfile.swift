@@ -18,6 +18,8 @@ struct UserProfile: Codable, Identifiable {
     var lastName: String
     var dateOfBirth: Date
     var weight: Double
+    /// Optional clinician- or dietitian-provided reference weight for the fluid estimate.
+    var referenceWeightKg: Double? = nil
     var height: Double
     var gender: String
     var activityLevel: String
@@ -32,7 +34,7 @@ struct UserProfile: Codable, Identifiable {
 // MARK: - CodingKeys do Mapowania Firestore
     enum CodingKeys: String, CodingKey {
         case userId = "uid"
-        case firstName, lastName, dateOfBirth, weight, height, gender, activityLevel, selectedDiets, weightGoal, profileImageURL
+        case firstName, lastName, dateOfBirth, weight, referenceWeightKg, height, gender, activityLevel, selectedDiets, weightGoal, profileImageURL
         case canUseGeneralEstimates
         case ageEligibilityConfirmedAt, healthDataConsentAt, privacyPolicyVersion
     }
@@ -90,8 +92,8 @@ struct UserProfile: Codable, Identifiable {
     }
     
     var isHealthProfileComplete: Bool {
-        let hasValidWeight = weight >= 30 && weight <= 300
-        let hasValidHeight = height >= 120 && height <= 250
+        let hasValidWeight = HydrationCalculationService.supportedWeightRangeKg.contains(weight)
+        let hasValidHeight = HydrationCalculationService.supportedHeightRangeCm.contains(height)
         let hasValidAge = (AgeEligibility.minimumAge...AgeEligibility.maximumAge).contains(age)
         let hasSupportedSex = resolvedSexCategory != nil
         let hasActivity = resolvedActivityCategory != nil
@@ -182,17 +184,25 @@ struct UserProfile: Codable, Identifiable {
         return estimate
     }
 
-    /// EFSA adequate intake for total water, not a drinks-only prescription.
-    func calculateWaterGoalMl() -> Double? {
-        guard hasCurrentHealthConsent,
-              canUseGeneralEstimates == true,
-              (AgeEligibility.minimumAge...AgeEligibility.maximumAge).contains(age) else { return nil }
-
+    func hydrationAssessment(lifeStage: HydrationLifeStage = .standard) -> HydrationAssessment? {
+        let referenceSex: HydrationReferenceSex?
         switch resolvedSexCategory {
-        case "woman": return 2_000
-        case "man": return 2_500
-        default: return nil
+        case "woman": referenceSex = .female
+        case "man": referenceSex = .male
+        default: referenceSex = nil
         }
+
+        return HydrationCalculationService.assess(
+            HydrationProfileInput(
+                age: age,
+                referenceSex: referenceSex,
+                currentWeightKg: weight,
+                heightCm: height,
+                providedReferenceWeightKg: referenceWeightKg,
+                lifeStage: lifeStage,
+                isEligibleForGeneralEstimates: hasCurrentHealthConsent && canUseGeneralEstimates == true
+            )
+        )
     }
 
     struct NutrientRange {

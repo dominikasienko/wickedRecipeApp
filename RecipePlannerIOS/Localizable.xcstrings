@@ -19512,6 +19512,456 @@
           }
         }
       }
+    },
+    "%lld ml/day" : {
+      "localizations" : {
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld ml/dzień"
+          }
+        }
+      }
+    },
+    "A valid current weight and height are needed for the body-weight estimate." : {
+      "localizations" : {
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Do oszacowania na podstawie masy ciała potrzebne są prawidłowe dane o aktualnej masie i wzroście."
+          }
+        }
+      }
+    },
+    "A weight-based fluid estimate is unavailable for the current profile. You can still log beverages." : {
+      "localizations" : {
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dla obecnego profilu nie można obliczyć szacunkowej ilości płynów na podstawie masy ciała. Nadal możesz zapisywać napoje."
+          }
+        }
+      }
+    },
+    "Activity categories do not add a fixed amount. Exercise and heat-related losses vary with duration, intensity, temperature, humidity and the individual. The session calculator uses measured session data and does not change the everyday estimate. Follow clinical advice if you have a fluid restriction or a condition affecting fluid balance." : {
+      "localizations" : {
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Poziom aktywności nie dodaje stałej ilości płynów. Straty podczas wysiłku i upału zależą od czasu trwania i intensywności aktywności, temperatury, wilgotności oraz indywidualnych cech. Kalkulator wykorzystuje pomiary z konkretnej sesji i nie zmienia codziennego oszacowania. Jeśli masz zalecone ograniczenie płynów lub chorobę wpływającą na gospodarkę wodną, stosuj się do zaleceń lekarza."
+          }
+        }
+      }
+    },
+    "Activity level does not add a fixed amount. Exercise and heat losses vary with duration, intensity, temperature, humidity and the individual. The session calculator uses measured session data; it does not change the everyday estimate." : {
+      "localizations" : {
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Poziom aktywności nie dodaje stałej ilości płynów. Straty podczas wysiłku i upału zależą od czasu trwania i intensywności, temperatury, wilgotności oraz indywidualnych cech. Kalkulator wykorzystuje pomiary z konkretnej sesji i nie zmienia codziennego oszacowania."
+          }
+        }
+      }
+    },
+    "Approximate minimum fluid estimate (NCEŻ, 30 ml/kg)" : {
+      "localizations" : {
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Szacunkowe minimum płynów (NCEŻ, 30 ml/kg)"
+          }
+        }
+      }
+    },
+    "At BMI 25 or higher, this estimate needs an appropriate reference weight advised by a clinician or dietitian. Add it in Edit Profile; otherwise no weight-based estimate is shown." : {
+      "localizations" : {
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Przy BMI 25 lub wyższym to oszacowanie wymaga odpowiedniej masy ciała zaleconej przez lekarza lub dietetyka. Wpisz ją w edycji profilu. Bez niej oszacowanie na podstawie masy ciała nie będzie wyświetlane."
+          }
+        }
+      }
+    },
+    "At BMI 25 or higher, this estimate needs an appropriate reference weight advised by a clinician or dietitian. No weight-based estimate is shown without it." : {
+      "localizations" : {
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Przy BMI 25 lub wyższym to oszacowanie wymaga odpowiedniej masy ciała zaleconej przez lekarza lub dietetyka. Bez niej oszacowanie na podstawie masy ciała nie będzie wyświetlane."
+          }
+        }
+      }
+    },
+    "Calculate session estimate" : {
+      "localizations" : {
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Oblicz szacunek dla sesji"
+          }
+        }
+      }
+    },
+    "EFSA provides a separate population reference for total water from all drinks and food moisture under moderate temperature and activity. This tracker records beverages only and does not measure water from food." : {
+      "localizations" : {
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "EFSA podaje odrębną wartość referencyjną dla całkowitej ilości wody pochodzącej z napojów i żywności, w warunkach umiarkowanej temperatury i aktywności. Ten rejestr zapisuje napoje, ale nie uwzględnia wody z żywności."
+          }
+        }
+      }
+    },
+    "EFSA provides a separate population reference for total water from all drinks and food moisture under moderate temperature and activity. Wicked Recipe records beverages, not water in food, so logged drinks are not the same as EFSA total water." : {
+      "localizations" : {
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "EFSA podaje odrębną wartość referencyjną dla całkowitej ilości wody z napojów i żywności, w warunkach umiarkowanej temperatury i aktywności. Wicked Recipe zapisuje napoje, ale nie wodę z żywności, dlatego zapisanych napojów nie należy utożsamiać z całkowitą ilością wody według EFSA."
+          }
+        }
+      }
+    },
+    "EFSA total-water reference: %lld ml/day (includes food and all drinks)" : {
+      "localizations" : {
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wartość referencyjna EFSA dla wody ogółem: %lld ml/dzień (żywność i wszystkie napoje)"
+          }
+        }
+      }
+    },
+    "Enter valid weights, a duration above zero, and non-negative fluid and urine amounts." : {
+      "localizations" : {
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wpisz prawidłowe masy ciała, czas trwania większy od zera oraz nieujemne ilości wypitych płynów i moczu."
+          }
+        }
+      }
+    },
+    "Estimate sweat loss from measured session data. This does not change your daily estimate." : {
+      "localizations" : {
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Oszacuj utratę potu na podstawie pomiarów z sesji. Nie zmienia to dziennego oszacowania."
+          }
+        }
+      }
+    },
+    "Estimated sweat loss" : {
+      "localizations" : {
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Szacowana utrata potu"
+          }
+        }
+      }
+    },
+    "Estimated sweat rate" : {
+      "localizations" : {
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Szacowane tempo pocenia"
+          }
+        }
+      }
+    },
+    "Exercise duration (minutes)" : {
+      "localizations" : {
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Czas trwania wysiłku (minuty)"
+          }
+        }
+      }
+    },
+    "Fluid consumed during exercise (ml)" : {
+      "localizations" : {
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Płyny wypite podczas wysiłku (ml)"
+          }
+        }
+      }
+    },
+    "How is your daily fluid estimate calculated?" : {
+      "localizations" : {
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Jak obliczane jest dzienne oszacowanie ilości płynów?"
+          }
+        }
+      }
+    },
+    "Hydration estimate" : {
+      "localizations" : {
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Szacowanie ilości płynów"
+          }
+        }
+      }
+    },
+    "If your BMI is 25 or higher, the NCEŻ 30 ml/kg estimate needs an appropriate reference weight. Enter one only if advised by a clinician or dietitian; leave blank if you do not have one." : {
+      "localizations" : {
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Przy BMI 25 lub wyższym oszacowanie NCEŻ (30 ml/kg) wymaga odpowiedniej masy ciała. Wpisz ją tylko wtedy, gdy zalecił ją lekarz lub dietetyk. Jeśli jej nie masz, pozostaw pole puste."
+          }
+        }
+      }
+    },
+    "Logged beverages are compared with this approximate minimum. Water from food is not tracked." : {
+      "localizations" : {
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zapisane napoje są porównywane z tym szacunkowym minimum. Woda z żywności nie jest rejestrowana."
+          }
+        }
+      }
+    },
+    "Logged beverages vs approximate NCEŻ minimum" : {
+      "localizations" : {
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zapisane napoje a szacunkowe minimum NCEŻ"
+          }
+        }
+      }
+    },
+    "Measure one exercise session to estimate sweat loss and sweat rate. The result describes that session only and does not change your everyday fluid estimate." : {
+      "localizations" : {
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wprowadź pomiary jednej sesji wysiłku, aby oszacować utratę potu i tempo pocenia. Wynik dotyczy tylko tej sesji i nie zmienia codziennego oszacowania ilości płynów."
+          }
+        }
+      }
+    },
+    "Measured session estimate" : {
+      "localizations" : {
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Szacunek dla zmierzonej sesji"
+          }
+        }
+      }
+    },
+    "NCEŻ describes 30 ml/kg as a simple minimum estimate for fluid intake. It is not an EFSA formula or an exact individual requirement. The tracker compares recorded beverages with this estimate when current weight is appropriate." : {
+      "localizations" : {
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "NCEŻ opisuje 30 ml/kg jako prostą metodę szacowania minimalnej ilości płynów. Nie jest to wzór EFSA ani dokładne, indywidualne zapotrzebowanie. Rejestr porównuje zapisane napoje z tym oszacowaniem, jeśli aktualna masa ciała jest odpowiednia do obliczenia."
+          }
+        }
+      }
+    },
+    "No net body-mass loss was measured, so no replacement amount is shown." : {
+      "localizations" : {
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nie odnotowano spadku masy ciała, dlatego nie podano ilości płynów do uzupełnienia."
+          }
+        }
+      }
+    },
+    "Possible recovery range when appropriate (100–120% of body-mass loss)" : {
+      "localizations" : {
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Możliwa ilość płynów do uzupełnienia w odpowiednich sytuacjach (100–120% utraty masy ciała)"
+          }
+        }
+      }
+    },
+    "Post-exercise weight (kg)" : {
+      "localizations" : {
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Masa ciała po wysiłku (kg)"
+          }
+        }
+      }
+    },
+    "Pre-exercise weight (kg)" : {
+      "localizations" : {
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Masa ciała przed wysiłkiem (kg)"
+          }
+        }
+      }
+    },
+    "Reference body weight" : {
+      "localizations" : {
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zalecana masa ciała"
+          }
+        }
+      }
+    },
+    "Reference weight advised by a clinician or dietitian (kg)" : {
+      "localizations" : {
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Masa ciała zalecona przez lekarza lub dietetyka (kg)"
+          }
+        }
+      }
+    },
+    "Reference weight advised by a specialist" : {
+      "localizations" : {
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Masa ciała zalecona przez specjalistę"
+          }
+        }
+      }
+    },
+    "Reference weight must be between 30 and 300 kg and lower than current weight. Enter it only if advised by a clinician or dietitian." : {
+      "localizations" : {
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Masa ciała musi wynosić od 30 do 300 kg i być niższa od aktualnej. Wpisz ją tylko wtedy, gdy zalecił ją lekarz lub dietetyk."
+          }
+        }
+      }
+    },
+    "Sweat rate varies with duration, intensity, temperature, humidity, clothing and individual physiology. This calculator does not collect environmental conditions, so do not generalize one session to other conditions." : {
+      "localizations" : {
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tempo pocenia zależy od czasu trwania i intensywności wysiłku, temperatury, wilgotności, ubrania oraz indywidualnych cech organizmu. Kalkulator nie zapisuje warunków otoczenia, dlatego nie przenoś wyniku jednej sesji na inne warunki."
+          }
+        }
+      }
+    },
+    "The IOC describes 100–120% of body-mass loss for appropriate recovery, especially after exercise in heat. Fluids and food can contribute. This range is not added to the daily estimate." : {
+      "localizations" : {
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Według IOC w odpowiednich sytuacjach regeneracyjnych można uzupełnić około 100–120% utraconej masy ciała, szczególnie po wysiłku w upale. Płyny i żywność mogą wspólnie pokryć tę ilość. Wartość ta nie jest dodawana do dziennego oszacowania."
+          }
+        }
+      }
+    },
+    "The NCEŻ 30 ml/kg estimate is shown only for adults. The EFSA reference is a separate population value." : {
+      "localizations" : {
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Oszacowanie NCEŻ 30 ml/kg jest wyświetlane tylko dla osób dorosłych. Wartość EFSA jest odrębną wartością populacyjną."
+          }
+        }
+      }
+    },
+    "The NCEŻ 30 ml/kg estimate is shown only for adults. The EFSA reference is separate." : {
+      "localizations" : {
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Oszacowanie NCEŻ 30 ml/kg jest wyświetlane tylko dla osób dorosłych. Wartość EFSA jest odrębna."
+          }
+        }
+      }
+    },
+    "The NCEŻ method is a practical lower fluid estimate: body weight in kilograms × 30 ml. It is not an EFSA formula or a precise individual requirement." : {
+      "localizations" : {
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Metoda NCEŻ to praktyczny szacunek minimalnej ilości płynów: masa ciała w kilogramach × 30 ml. Nie jest to wzór EFSA ani dokładne, indywidualne zapotrzebowanie."
+          }
+        }
+      }
+    },
+    "The app does not collect pregnancy, breastfeeding, medical fluid restrictions or environmental measurements. These educational estimates may not apply to those situations; follow advice from your healthcare professional and do not force fluid intake." : {
+      "localizations" : {
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aplikacja nie zbiera informacji o ciąży, karmieniu piersią, zaleconych ograniczeniach płynów ani warunkach otoczenia. Te edukacyjne oszacowania mogą nie dotyczyć takich sytuacji. Stosuj się do zaleceń personelu medycznego i nie zmuszaj się do picia."
+          }
+        }
+      }
+    },
+    "The calculation treats about 1 kg of body-mass change as 1 L of water. Other body-mass changes and measurement error can affect the estimate. Avoid rapidly drinking large volumes; follow clinical advice for medical fluid needs." : {
+      "localizations" : {
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "W obliczeniu przyjęto w przybliżeniu, że zmiana masy ciała o 1 kg odpowiada 1 l wody. Na wynik mogą wpływać także inne zmiany masy ciała i błędy pomiaru. Unikaj szybkiego wypijania dużych ilości płynów; w kwestiach medycznych stosuj się do zaleceń lekarza."
+          }
+        }
+      }
+    },
+    "The estimate uses current weight when BMI is below 25. At BMI 25 or higher, it uses only a reference weight entered by you after clinical guidance; otherwise no body-weight estimate is shown." : {
+      "localizations" : {
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Przy BMI poniżej 25 oszacowanie wykorzystuje aktualną masę ciała. Przy BMI 25 lub wyższym uwzględnia wyłącznie masę ciała wpisaną po konsultacji ze specjalistą; w przeciwnym razie oszacowanie na podstawie masy ciała nie jest wyświetlane."
+          }
+        }
+      }
+    },
+    "The reference weight must be valid and lower than current weight. Update or clear it in Edit Profile." : {
+      "localizations" : {
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zalecana masa ciała musi być prawidłowa i niższa od aktualnej. Zmień ją lub usuń w edycji profilu."
+          }
+        }
+      }
+    },
+    "Urine output during exercise (ml; enter 0 if none)" : {
+      "localizations" : {
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ilość moczu podczas wysiłku (ml; wpisz 0, jeśli nie wystąpiła)"
+          }
+        }
+      }
+    },
+    "Weight used" : {
+      "localizations" : {
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Użyta masa ciała"
+          }
+        }
+      }
     }
   },
   "version" : "1.1"

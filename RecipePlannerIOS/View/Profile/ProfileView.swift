@@ -96,6 +96,13 @@ struct ProfileView: View {
                                 value: .weight(profile.weight),
                                 icon: "scalemass"
                             )
+                            if let referenceWeight = profile.referenceWeightKg {
+                                DetailRow(
+                                    title: AppLocalization.key("Reference body weight"),
+                                    value: .weight(referenceWeight),
+                                    icon: "scalemass.fill"
+                                )
+                            }
                             DetailRow(title: AppLocalization.key("Height"), value: .height(profile.height), icon: "ruler")
                             DetailRow(
                                 title: AppLocalization.key("Sex category for estimate"),
@@ -251,15 +258,56 @@ struct NutritionalGoalsSection: View {
                     .foregroundStyle(.white.opacity(0.75))
             }
 
-            if let waterReference = profile.calculateWaterGoalMl() {
-                HStack {
-                    Text(AppLocalization.key("EFSA total-water reference (includes food)"))
-                        .font(.subheadline)
-                    Spacer()
-                    Text("\(Int(waterReference)) ml")
-                        .bold()
+            if let assessment = profile.hydrationAssessment() {
+                if let estimate = assessment.dailyFluidEstimate {
+                    HStack {
+                        Text(AppLocalization.key("Approximate minimum fluid estimate (NCEŻ, 30 ml/kg)"))
+                            .font(.subheadline)
+                        Spacer()
+                        Text("\(Int((estimate.estimatedMlPerDay / 100).rounded() * 100)) ml")
+                            .bold()
+                    }
+                    .padding(.top, 4)
+                    HStack {
+                        Text(estimate.weightSource == .currentBodyWeight
+                             ? AppLocalization.key("Weight used")
+                             : AppLocalization.key("Reference weight advised by a specialist"))
+                            .font(.caption)
+                        Spacer()
+                        Text(estimate.weightKgUsed, format: .number.precision(.fractionLength(1)))
+                            .font(.caption)
+                        Text(verbatim: " kg")
+                            .font(.caption)
+                    }
+                    .foregroundStyle(.white.opacity(0.72))
+                } else if assessment.fluidEstimateUnavailableReason == .referenceWeightRequiredForBMI25OrHigher {
+                    Text(AppLocalization.key("At BMI 25 or higher, this estimate needs an appropriate reference weight advised by a clinician or dietitian. No weight-based estimate is shown without it."))
+                        .font(.caption)
+                        .foregroundStyle(.white.opacity(0.7))
+                } else if assessment.fluidEstimateUnavailableReason == .adultEstimateOnly {
+                    Text(AppLocalization.key("The NCEŻ 30 ml/kg estimate is shown only for adults. The EFSA reference is a separate population value."))
+                        .font(.caption)
+                        .foregroundStyle(.white.opacity(0.7))
+                } else if assessment.fluidEstimateUnavailableReason == .validReferenceWeightRequired {
+                    Text(AppLocalization.key("The reference weight must be valid and lower than current weight. Update or clear it in Edit Profile."))
+                        .font(.caption)
+                        .foregroundStyle(.white.opacity(0.7))
+                } else if assessment.fluidEstimateUnavailableReason == .validHeightAndWeightRequired {
+                    Text(AppLocalization.key("A valid current weight and height are needed for the body-weight estimate."))
+                        .font(.caption)
+                        .foregroundStyle(.white.opacity(0.7))
                 }
-                .padding(.top, 4)
+
+                if let waterReference = assessment.efsaReference?.totalWaterMlPerDay {
+                    HStack {
+                        Text(AppLocalization.key("EFSA total-water reference (includes food)"))
+                            .font(.subheadline)
+                        Spacer()
+                        Text("\(Int(waterReference)) ml")
+                            .bold()
+                    }
+                    .padding(.top, 4)
+                }
             } else {
                 Text(AppLocalization.key("No general water reference is available for this profile."))
                     .font(.caption)
@@ -271,10 +319,25 @@ struct NutritionalGoalsSection: View {
                     Text(AppLocalization.key("Energy uses the 2023 NASEM Estimated Energy Requirement equations. They estimate maintenance needs from age, height, weight, sex category, and overall activity; individual error is expected."))
                     Text(AppLocalization.key("The NASEM equations were developed for U.S. and Canadian populations and have not been calibrated specifically for Polish users. Activity categories describe the whole day, not workout count."))
                     Text(AppLocalization.key("Macro amounts are broad acceptable ranges, not exact personal prescriptions. Diet preferences and weight goal do not change these physiological estimates."))
-                    Text(AppLocalization.key("EFSA water values are adequate intakes of total water from all beverages and food moisture under moderate conditions. This app logs beverages only."))
                     Link(AppLocalization.key("NASEM 2023 energy equations"), destination: URL(string: "https://www.nationalacademies.org/read/26818/chapter/7")!)
                     Link(AppLocalization.key("National Academies macronutrient ranges"), destination: URL(string: "https://www.nationalacademies.org/read/27957/chapter/5")!)
+                }
+                .font(.caption)
+                .foregroundStyle(.white.opacity(0.75))
+                .padding(.top, 8)
+            }
+
+            DisclosureGroup(AppLocalization.key("How is your daily fluid estimate calculated?")) {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(AppLocalization.key("The NCEŻ method is a practical lower fluid estimate: body weight in kilograms × 30 ml. It is not an EFSA formula or a precise individual requirement."))
+                    Text(AppLocalization.key("The estimate uses current weight when BMI is below 25. At BMI 25 or higher, it uses only a reference weight entered by you after clinical guidance; otherwise no body-weight estimate is shown."))
+                    Text(AppLocalization.key("EFSA provides a separate population reference for total water from all drinks and food moisture under moderate temperature and activity. Wicked Recipe records beverages, not water in food, so logged drinks are not the same as EFSA total water."))
+                    Text(AppLocalization.key("Activity level does not add a fixed amount. Exercise and heat losses vary with duration, intensity, temperature, humidity and the individual. The session calculator uses measured session data; it does not change the everyday estimate."))
+                    Text(AppLocalization.key("The app does not collect pregnancy, breastfeeding, medical fluid restrictions or environmental measurements. These educational estimates may not apply to those situations; follow advice from your healthcare professional and do not force fluid intake."))
                     Link(AppLocalization.key("EFSA total-water reference"), destination: URL(string: "https://efsa.onlinelibrary.wiley.com/doi/10.2903/j.efsa.2010.1459")!)
+                    Link(AppLocalization.key("NCEŻ fluid estimate (30 ml/kg)"), destination: URL(string: "https://ncez.pzh.gov.pl/abc-zywienia/plynne-kalorie-czy-moga-zaburzac-bilans-energetyczny-organizmu/")!)
+                    Link(AppLocalization.key("IOC exercise and heat hydration consensus"), destination: URL(string: "https://bjsm.bmj.com/content/57/1/8")!)
+                    Link(AppLocalization.key("National Academies water reference"), destination: URL(string: "https://www.nationalacademies.org/read/10925/chapter/6")!)
                 }
                 .font(.caption)
                 .foregroundStyle(.white.opacity(0.75))

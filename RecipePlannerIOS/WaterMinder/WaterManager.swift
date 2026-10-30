@@ -19,7 +19,6 @@ class WaterManager {
     private var hasClearedLocalData = false
     private var pendingEntries: [UUID: PendingEntry] = [:]
 
-    var goal: WaterGoal?
     private(set) var currentDate: Date
     var allRecords: [WaterRecord] = []
 
@@ -61,18 +60,9 @@ class WaterManager {
         listenerRegistration?.remove()
     }
 
-    /// Sets the EFSA total-water reference when the profile can use general estimates.
-    func calculateGoal(profile: UserProfile) {
-        goal = WaterGoal(
-            dailyGoalMl: profile.calculateWaterGoalMl(),
-            currentBeverageVolumeMl: todayTotalVolumeMl
-        )
-    }
-
     /// Refreshes the local calendar day when the app resumes or the day/time zone changes.
     func refreshCurrentDate(at date: Date? = nil) {
         currentDate = date ?? now()
-        refreshGoalTotals()
     }
 
     // MARK: - Firestore observation
@@ -103,7 +93,6 @@ class WaterManager {
                 guard self.listenerRegistration != nil else { return }
                 self.recordsRevision += 1
                 self.allRecords = self.applyingPendingEntries(to: records)
-                self.refreshGoalTotals()
             }
         }
     }
@@ -124,7 +113,6 @@ class WaterManager {
                 guard recordsRevision == revisionAtStart else { return }
                 recordsRevision += 1
                 allRecords = applyingPendingEntries(to: records)
-                refreshGoalTotals()
             }
         } catch {
             print("Error loading historical water records: \(error.localizedDescription)")
@@ -247,7 +235,6 @@ class WaterManager {
                 allRecords.append(emptyRecord)
                 allRecords.sort { ($0.id ?? "") > ($1.id ?? "") }
             }
-            refreshGoalTotals()
         }
     }
 
@@ -257,7 +244,6 @@ class WaterManager {
         let alreadyPresent = WaterIntakeDay.entries(in: allRecords).contains { $0.id == entry.id }
         allRecords = WaterIntakeDay.appending(entry, documentID: documentID, to: allRecords, userId: userId)
         if !alreadyPresent { recordsRevision += 1 }
-        refreshGoalTotals()
     }
 
     private func applyingPendingEntries(to fetchedRecords: [WaterRecord]) -> [WaterRecord] {
@@ -290,7 +276,6 @@ class WaterManager {
             allRecords[index].entries.removeAll { $0.id == id }
         }
         recordsRevision += 1
-        refreshGoalTotals()
     }
 
     func stopListening() {
@@ -318,7 +303,6 @@ class WaterManager {
         await MainActor.run {
             allRecords = []
             hasClearedLocalData = false
-            refreshGoalTotals()
         }
     }
 
@@ -326,11 +310,5 @@ class WaterManager {
         stopListening()
         allRecords = []
         hasClearedLocalData = true
-        goal = nil
-    }
-
-    private func refreshGoalTotals() {
-        guard goal != nil else { return }
-        goal?.currentBeverageVolumeMl = todayTotalVolumeMl
     }
 }

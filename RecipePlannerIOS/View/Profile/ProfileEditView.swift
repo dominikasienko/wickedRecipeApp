@@ -15,9 +15,9 @@ struct ProfileEditView: View {
     @Environment(AuthManager.self) private var authManager
     @Environment(ProfileManager.self) private var profileManager
     @Environment(StorageManager.self) private var storageManager
-    @Environment(WaterManager.self) private var waterManager
 
     @State private var editableProfile: UserProfile
+    @State private var referenceWeightInput: String
     @State private var selectedImage: UIImage?
     @State private var profileImageEditState: ProfileImageEditState = .unchanged
     @State private var savingError: LocalizedStringKey?
@@ -27,6 +27,7 @@ struct ProfileEditView: View {
 
     init(profile: UserProfile) {
         _editableProfile = State(initialValue: profile.canonicalizedForStorage())
+        _referenceWeightInput = State(initialValue: profile.referenceWeightKg.map { String($0) } ?? "")
     }
 
     var body: some View {
@@ -89,6 +90,15 @@ struct ProfileEditView: View {
                                 .foregroundStyle(.secondary)
                         }
                     }
+                }
+
+                Section(AppLocalization.key("Hydration estimate")) {
+                    Text(AppLocalization.key("If your BMI is 25 or higher, the NCEŻ 30 ml/kg estimate needs an appropriate reference weight. Enter one only if advised by a clinician or dietitian; leave blank if you do not have one."))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+
+                    TextField(AppLocalization.key("Reference weight advised by a clinician or dietitian (kg)"), text: $referenceWeightInput)
+                        .keyboardType(.decimalPad)
                 }
                 
                 Section("Selected diets") {
@@ -158,14 +168,27 @@ struct ProfileEditView: View {
             return
         }
         
-        if !(30...300).contains(editableProfile.weight) {
+        if !HydrationCalculationService.supportedWeightRangeKg.contains(editableProfile.weight) {
             savingError = AppLocalization.key( "Weight must be between 30 and 300 kg.")
             return
         }
         
-        if !(120...250).contains(editableProfile.height) {
+        if !HydrationCalculationService.supportedHeightRangeCm.contains(editableProfile.height) {
             savingError = AppLocalization.key( "Height must be between 120 and 250 cm.")
             return
+        }
+
+        let trimmedReferenceWeight = referenceWeightInput.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmedReferenceWeight.isEmpty {
+            editableProfile.referenceWeightKg = nil
+        } else {
+            guard let referenceWeight = ProfileMeasurementInput.parse(trimmedReferenceWeight),
+                  HydrationCalculationService.supportedWeightRangeKg.contains(referenceWeight),
+                  referenceWeight < editableProfile.weight else {
+                savingError = AppLocalization.key("Reference weight must be between 30 and 300 kg and lower than current weight. Enter it only if advised by a clinician or dietitian.")
+                return
+            }
+            editableProfile.referenceWeightKg = referenceWeight
         }
         
         do {
@@ -197,8 +220,6 @@ struct ProfileEditView: View {
                 uid: uid,
                 removingProfileImage: profileImageEditState == .removal
             )
-            waterManager.calculateGoal(profile: profileToSave)
-
             if profileImageEditState == .removal {
                 do {
                     try await storageManager.deleteProfileImage(userId: uid)
