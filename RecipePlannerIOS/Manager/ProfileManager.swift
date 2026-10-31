@@ -84,6 +84,14 @@ class ProfileManager {
                 self.userProfile = normalizedProfile
                 self.didCreateDefaultProfile = false
             }
+            do {
+                try await HydrationTargetHistoryStore.recordCurrentDay(
+                    profile: normalizedProfile,
+                    userID: uid
+                )
+            } catch {
+                print("ProfileManager: Hydration target history could not be updated: \(error.localizedDescription)")
+            }
         } catch {
             print("ProfileManager: Profile save failed.")
             throw error
@@ -102,6 +110,11 @@ class ProfileManager {
                 await MainActor.run {
                     self.userProfile = profile
                 }
+                do {
+                    try await HydrationTargetHistoryStore.recordCurrentDay(profile: profile, userID: userId)
+                } catch {
+                    print("ProfileManager: Today's hydration target could not be recorded: \(error.localizedDescription)")
+                }
             } catch {
                 print("ProfileManager: Profile data could not be read.")
                 throw NSError(domain: "ProfileError", code: 1, userInfo: [NSLocalizedDescriptionKey: "Profile data mapping error. Verify that the UserProfile model matches the Firestore data."])
@@ -118,6 +131,11 @@ class ProfileManager {
             await MainActor.run {
                 self.userProfile = defaultProfile
                 self.didCreateDefaultProfile = true
+            }
+            do {
+                try await HydrationTargetHistoryStore.recordCurrentDay(profile: defaultProfile, userID: userId)
+            } catch {
+                print("ProfileManager: Today's unavailable hydration target could not be recorded: \(error.localizedDescription)")
             }
         }
     }

@@ -3,6 +3,29 @@ import FirebaseFirestore
 import FirebaseAuth
 import Observation
 
+enum WaterEntryMutationError: LocalizedError {
+    case unauthenticated
+    case invalidEntry
+    case entryNotFound
+
+    var errorDescription: String? {
+        switch self {
+        case .unauthenticated: "You must be signed in to update hydration history."
+        case .invalidEntry: "The hydration entry is invalid."
+        case .entryNotFound: "The hydration entry could not be found."
+        }
+    }
+}
+
+private struct HydrationAnalyticsCacheKey: Equatable {
+    let recordsRevision: Int
+    let day: Date
+    let timeZoneIdentifier: String
+    let localeIdentifier: String
+    let firstWeekday: Int
+    let minimumDaysInFirstWeek: Int
+}
+
 @Observable
 class WaterManager {
     private struct PendingEntry {
@@ -15,7 +38,8 @@ class WaterManager {
     private let userId: String
     private let calendar: Calendar
     private let now: () -> Date
-    private var recordsRevision = 0
+    private(set) var analyticsRevision = 0
+    @ObservationIgnored private var cachedAnalytics: (key: HydrationAnalyticsCacheKey, value: HydrationAnalyticsSnapshot)?
     private var hasClearedLocalData = false
     private var pendingEntries: [UUID: PendingEntry] = [:]
 
@@ -42,6 +66,27 @@ class WaterManager {
 
     var todayTotalVolumeMl: Double {
         todayEntries.reduce(0) { $0 + $1.amountMl }
+    }
+
+    func hydrationAnalytics(
+        calendar: Calendar = .autoupdatingCurrent,
+        asOf date: Date? = nil
+    ) -> HydrationAnalyticsSnapshot {
+        let referenceDate = date ?? currentDate
+        let key = HydrationAnalyticsCacheKey(
+            recordsRevision: analyticsRevision,
+            day: calendar.startOfDay(for: referenceDate),
+            timeZoneIdentifier: calendar.timeZone.identifier,
+            localeIdentifier: calendar.locale?.identifier ?? "",
+            firstWeekday: calendar.firstWeekday,
+            minimumDaysInFirstWeek: calendar.minimumDaysInFirstWeek
+        )
+        if let cachedAnalytics, cachedAnalytics.key == key {
+            return cachedAnalytics.value
+        }
+        let value = HydrationAnalyticsService.summarize(records: allRecords, calendar: calendar, asOf: referenceDate)
+        cachedAnalytics = (key, value)
+        return value
     }
 
     init(
@@ -91,8 +136,8 @@ class WaterManager {
 
             DispatchQueue.main.async {
                 guard self.listenerRegistration != nil else { return }
-                self.recordsRevision += 1
                 self.allRecords = self.applyingPendingEntries(to: records)
+                self.markAnalyticsChanged()
             }
         }
     }
@@ -100,7 +145,7 @@ class WaterManager {
     /// Performs an explicit refresh for the Settings screen. Live snapshots remain the
     /// primary source of truth; an older one-shot read cannot replace a newer listener event.
     func loadHistoricalRecords() async {
-        let revisionAtStart = await MainActor.run { recordsRevision }
+        let revisionAtStart = await MainActor.run { analyticsRevision }
         let collectionRef = db.collection("users").document(userId)
             .collection("waterRecords")
 
@@ -110,9 +155,9 @@ class WaterManager {
                 .sorted { ($0.id ?? "") > ($1.id ?? "") }
 
             await MainActor.run {
-                guard recordsRevision == revisionAtStart else { return }
-                recordsRevision += 1
+                guard analyticsRevision == revisionAtStart else { return }
                 allRecords = applyingPendingEntries(to: records)
+                markAnalyticsChanged()
             }
         } catch {
             print("Error loading historical water records: \(error.localizedDescription)")
@@ -171,6 +216,129 @@ class WaterManager {
     func addLog(amountMl: Double) async throws {
         let water = HydrationDrinkSelection(type: .water, milkChoice: nil)
         try await addLog(amountMl: amountMl, beverage: water)
+    }
+
+    func updateEntry(_ entry: WaterEntry) async throws {
+        try validateEntryMutation(entry)
+        let sourceDocumentIDs = await MainActor.run {
+            allRecords.filter { $0.entries.contains(where: { $0.id == entry.id }) }
+                .compactMap(\.id)
+        }
+        guard !sourceDocumentIDs.isEmpty else { throw WaterEntryMutationError.entryNotFound }
+
+        let destinationDocumentID = WaterIntakeDay.documentID(for: entry.timestamp, calendar: calendar)
+        let documentIDs = Set(sourceDocumentIDs + [destinationDocumentID]).sorted()
+        let collection = db.collection("users").document(userId).collection("waterRecords")
+        let references = Dictionary(uniqueKeysWithValues: documentIDs.map { ($0, collection.document($0)) })
+
+        _ = try await db.runTransaction { transaction, errorPointer -> Any? in
+            do {
+                var recordsByID: [String: WaterRecord] = [:]
+                for documentID in documentIDs {
+                    guard let reference = references[documentID] else { continue }
+                    let snapshot = try transaction.getDocument(reference)
+                    if snapshot.exists {
+                        recordsByID[documentID] = try snapshot.data(as: WaterRecord.self)
+                    } else if documentID == destinationDocumentID {
+                        var emptyRecord = WaterRecord.empty(userId: self.userId)
+                        emptyRecord.id = documentID
+                        recordsByID[documentID] = emptyRecord
+                    }
+                }
+
+                var foundEntry = false
+                for documentID in sourceDocumentIDs {
+                    guard var record = recordsByID[documentID] else { continue }
+                    let originalCount = record.entries.count
+                    record.entries.removeAll { $0.id == entry.id }
+                    foundEntry = foundEntry || originalCount != record.entries.count
+                    recordsByID[documentID] = record
+                }
+                guard foundEntry else { throw WaterEntryMutationError.entryNotFound }
+
+                var destination = recordsByID[destinationDocumentID] ?? WaterRecord.empty(userId: self.userId)
+                destination.id = destinationDocumentID
+                destination.entries.append(entry)
+                recordsByID[destinationDocumentID] = destination
+
+                for documentID in Set(sourceDocumentIDs + [destinationDocumentID]) {
+                    guard let record = recordsByID[documentID],
+                          let reference = references[documentID] else { continue }
+                    try transaction.setData(from: record, forDocument: reference, merge: true)
+                }
+                return nil
+            } catch {
+                errorPointer?.pointee = error as NSError
+                return nil
+            }
+        }
+
+        await MainActor.run {
+            allRecords = WaterIntakeDay.replacing(entry, in: allRecords, userId: userId, calendar: calendar)
+            markAnalyticsChanged()
+        }
+    }
+
+    func deleteEntry(id entryID: UUID) async throws {
+        guard Auth.auth().currentUser?.uid == userId else {
+            throw WaterEntryMutationError.unauthenticated
+        }
+        let sourceDocumentIDs = await MainActor.run {
+            allRecords.filter { $0.entries.contains(where: { $0.id == entryID }) }
+                .compactMap(\.id)
+        }
+        guard !sourceDocumentIDs.isEmpty else { throw WaterEntryMutationError.entryNotFound }
+
+        let collection = db.collection("users").document(userId).collection("waterRecords")
+        let references = Dictionary(uniqueKeysWithValues: sourceDocumentIDs.map { ($0, collection.document($0)) })
+        _ = try await db.runTransaction { transaction, errorPointer -> Any? in
+            do {
+                var recordsByID: [String: WaterRecord] = [:]
+                for documentID in sourceDocumentIDs {
+                    guard let reference = references[documentID] else { continue }
+                    let snapshot = try transaction.getDocument(reference)
+                    guard snapshot.exists else { continue }
+                    recordsByID[documentID] = try snapshot.data(as: WaterRecord.self)
+                }
+
+                var foundEntry = false
+                for documentID in sourceDocumentIDs {
+                    guard var record = recordsByID[documentID] else { continue }
+                    let originalCount = record.entries.count
+                    record.entries.removeAll { $0.id == entryID }
+                    foundEntry = foundEntry || originalCount != record.entries.count
+                    recordsByID[documentID] = record
+                }
+                guard foundEntry else { throw WaterEntryMutationError.entryNotFound }
+
+                for (documentID, record) in recordsByID {
+                    guard let reference = references[documentID] else { continue }
+                    try transaction.setData(from: record, forDocument: reference, merge: true)
+                }
+                return nil
+            } catch {
+                errorPointer?.pointee = error as NSError
+                return nil
+            }
+        }
+
+        await MainActor.run {
+            allRecords = WaterIntakeDay.removing(entryID: entryID, from: allRecords)
+            markAnalyticsChanged()
+        }
+    }
+
+    private func validateEntryMutation(_ entry: WaterEntry) throws {
+        guard Auth.auth().currentUser?.uid == userId else {
+            throw WaterEntryMutationError.unauthenticated
+        }
+        guard entry.amountMl.isFinite,
+              entry.amountMl > 0,
+              entry.timestamp.timeIntervalSince1970.isFinite,
+              !entry.beverageId.isEmpty,
+              !entry.beverageName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            throw WaterEntryMutationError.invalidEntry
+        }
     }
 
     /// Clears entries for the current local calendar day from every daily document. This
@@ -243,7 +411,7 @@ class WaterManager {
     private func appendLocally(_ entry: WaterEntry, documentID: String) {
         let alreadyPresent = WaterIntakeDay.entries(in: allRecords).contains { $0.id == entry.id }
         allRecords = WaterIntakeDay.appending(entry, documentID: documentID, to: allRecords, userId: userId)
-        if !alreadyPresent { recordsRevision += 1 }
+        if !alreadyPresent { markAnalyticsChanged() }
     }
 
     private func applyingPendingEntries(to fetchedRecords: [WaterRecord]) -> [WaterRecord] {
@@ -275,7 +443,7 @@ class WaterManager {
         if let index = allRecords.firstIndex(where: { $0.id == pending.documentID }) {
             allRecords[index].entries.removeAll { $0.id == id }
         }
-        recordsRevision += 1
+        markAnalyticsChanged()
     }
 
     func stopListening() {
@@ -303,6 +471,7 @@ class WaterManager {
         await MainActor.run {
             allRecords = []
             hasClearedLocalData = false
+            markAnalyticsChanged()
         }
     }
 
@@ -310,5 +479,11 @@ class WaterManager {
         stopListening()
         allRecords = []
         hasClearedLocalData = true
+        markAnalyticsChanged()
+    }
+
+    private func markAnalyticsChanged() {
+        analyticsRevision += 1
+        cachedAnalytics = nil
     }
 }

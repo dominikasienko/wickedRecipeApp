@@ -32,6 +32,56 @@ enum ShoppingListPeriod: String, CaseIterable, Identifiable, Hashable {
     }
 }
 
+struct MealPlannerCalendarSelection: Equatable {
+    private(set) var selectedDate: Date
+    private(set) var viewMode: MealPlannerCalendarViewMode
+
+    init(
+        selectedDate: Date = Date(),
+        viewMode: MealPlannerCalendarViewMode = .month,
+        calendar: Calendar = .current
+    ) {
+        self.selectedDate = calendar.startOfDay(for: selectedDate)
+        self.viewMode = viewMode
+    }
+
+    mutating func selectViewMode(_ mode: MealPlannerCalendarViewMode) {
+        // Changing presentation never changes the anchored local calendar date.
+        viewMode = mode
+    }
+
+    mutating func selectDate(_ date: Date, calendar: Calendar = .current) {
+        selectedDate = calendar.startOfDay(for: date)
+    }
+
+    mutating func navigate(by amount: Int, calendar: Calendar = .current) {
+        if viewMode == .month,
+           let updated = MealPlanningCalendar.monthDate(byAdding: amount, to: selectedDate, calendar: calendar) {
+            selectedDate = calendar.startOfDay(for: updated)
+            return
+        }
+
+        let component: Calendar.Component = switch viewMode {
+        case .day: .day
+        case .week: .weekOfYear
+        case .month: .month
+        }
+        if let updated = calendar.date(byAdding: component, value: amount, to: selectedDate) {
+            selectedDate = calendar.startOfDay(for: updated)
+        }
+    }
+
+    mutating func returnToToday(_ today: Date = Date(), calendar: Calendar = .current) {
+        selectedDate = calendar.startOfDay(for: today)
+    }
+}
+
+enum MealPlannerCalendarMotion {
+    static func duration(reduceMotion: Bool) -> TimeInterval {
+        reduceMotion ? 0 : 0.22
+    }
+}
+
 struct MealPlanningDateRange: Equatable {
     /// Inclusive local start of the first calendar day.
     let startDate: Date

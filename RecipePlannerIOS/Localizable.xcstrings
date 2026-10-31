@@ -20572,6 +20572,786 @@
           }
         }
       }
+    },
+    "Delete this drink record?" : {
+      "localizations" : {
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Usunąć ten wpis napoju?"
+          }
+        }
+      }
+    },
+    "This removes only the selected hydration record." : {
+      "localizations" : {
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Usuwa tylko wybrany wpis nawodnienia."
+          }
+        }
+      }
+    },
+    "Hydration history could not be updated" : {
+      "localizations" : {
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nie udało się zaktualizować historii nawodnienia"
+          }
+        }
+      }
+    },
+    "Since hydration tracking began" : {
+      "localizations" : {
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Od rozpoczęcia rejestrowania nawodnienia"
+          }
+        }
+      }
+    },
+    "Tracking started" : {
+      "localizations" : {
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Początek rejestrowania"
+          }
+        }
+      }
+    },
+    "Total recorded beverages" : {
+      "localizations" : {
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Łączna ilość zapisanych napojów"
+          }
+        }
+      }
+    },
+    "Summed from unique, valid drink records" : {
+      "localizations" : {
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Suma unikalnych, prawidłowych wpisów napojów"
+          }
+        }
+      }
+    },
+    "Average on recorded days" : {
+      "localizations" : {
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Średnia z dni z wpisami"
+          }
+        }
+      }
+    },
+    "Goal estimate achieved" : {
+      "localizations" : {
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Osiągnięcie oszacowanego celu"
+          }
+        }
+      }
+    },
+    "No saved daily target is available for recorded days" : {
+      "localizations" : {
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Brak zapisanego dziennego celu dla dni z wpisami"
+          }
+        }
+      }
+    },
+    "Days with recorded drinks" : {
+      "localizations" : {
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dni z zapisanymi napojami"
+          }
+        }
+      }
+    },
+    "Only consecutive days with both entries and a saved target count" : {
+      "localizations" : {
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Liczą się tylko kolejne dni z wpisami i zapisanym celem"
+          }
+        }
+      }
+    },
+    "Highest recorded day" : {
+      "localizations" : {
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Najwyższy zapisany wynik dzienny"
+          }
+        }
+      }
+    },
+    "Lowest recorded day" : {
+      "localizations" : {
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Najniższy zapisany wynik dzienny"
+          }
+        }
+      }
+    },
+    "Last 7 days" : {
+      "localizations" : {
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ostatnie 7 dni"
+          }
+        }
+      }
+    },
+    "Last 30 days" : {
+      "localizations" : {
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ostatnie 30 dni"
+          }
+        }
+      }
+    },
+    "Recorded volume includes water and other logged beverages. The saved comparison is the profile-based approximate minimum shown by the daily tracker (30 ml/kg), not a medical prescription. Days without a saved target are excluded from goal rates." : {
+      "localizations" : {
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zapisana objętość obejmuje wodę i inne napoje. Porównanie wykorzystuje przybliżone minimum obliczane na podstawie profilu i pokazywane w dziennym rejestrze (30 ml/kg); nie jest zaleceniem medycznym. Dni bez zapisanego celu nie są uwzględniane w statystykach celu."
+          }
+        }
+      }
+    },
+    "No recorded hydration data" : {
+      "localizations" : {
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Brak zapisanych danych o nawodnieniu"
+          }
+        }
+      }
+    },
+    "Your summary will begin after you record a drink. No history or target values are generated for missing days." : {
+      "localizations" : {
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Podsumowanie rozpocznie się po zapisaniu napoju. Dla dni bez wpisów nie są tworzone dane historyczne ani wartości celu."
+          }
+        }
+      }
+    },
+    "Hydration trends" : {
+      "localizations" : {
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Trendy nawodnienia"
+          }
+        }
+      }
+    },
+    "Last 12 months" : {
+      "localizations" : {
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ostatnie 12 miesięcy"
+          }
+        }
+      }
+    },
+    "Full history" : {
+      "localizations" : {
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cała historia"
+          }
+        }
+      }
+    },
+    "Trend period" : {
+      "localizations" : {
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Okres trendu"
+          }
+        }
+      }
+    },
+    "Daily" : {
+      "localizations" : {
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dziennie"
+          }
+        }
+      }
+    },
+    "Weekly" : {
+      "localizations" : {
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tygodniowo"
+          }
+        }
+      }
+    },
+    "Monthly" : {
+      "localizations" : {
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Miesięcznie"
+          }
+        }
+      }
+    },
+    "Previous hydration period" : {
+      "localizations" : {
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Poprzedni okres nawodnienia"
+          }
+        }
+      }
+    },
+    "Choose a date" : {
+      "localizations" : {
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wybierz datę"
+          }
+        }
+      }
+    },
+    "Choose a date in this period" : {
+      "localizations" : {
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wybierz datę z tego okresu"
+          }
+        }
+      }
+    },
+    "Next hydration period" : {
+      "localizations" : {
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Następny okres nawodnienia"
+          }
+        }
+      }
+    },
+    "Recorded beverage volume" : {
+      "localizations" : {
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zapisana objętość napojów"
+          }
+        }
+      }
+    },
+    "Saved daily estimate" : {
+      "localizations" : {
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zapisane oszacowanie dzienne"
+          }
+        }
+      }
+    },
+    "No data in this period" : {
+      "localizations" : {
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Brak danych w tym okresie"
+          }
+        }
+      }
+    },
+    "Choose an earlier period or record a drink to add real data to this chart." : {
+      "localizations" : {
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wybierz wcześniejszy okres lub zapisz napój, aby wyświetlić rzeczywiste dane na wykresie."
+          }
+        }
+      }
+    },
+    "Recorded volume" : {
+      "localizations" : {
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zapisana objętość"
+          }
+        }
+      }
+    },
+    "Saved estimate for this day" : {
+      "localizations" : {
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zapisane oszacowanie na ten dzień"
+          }
+        }
+      }
+    },
+    "Recorded intake met the saved estimate." : {
+      "localizations" : {
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zapisane spożycie osiągnęło oszacowany cel."
+          }
+        }
+      }
+    },
+    "Recorded intake was below the saved estimate." : {
+      "localizations" : {
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zapisane spożycie było niższe od oszacowanego celu."
+          }
+        }
+      }
+    },
+    "No historical target was saved for this date, so it is excluded from goal statistics." : {
+      "localizations" : {
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dla tej daty nie zapisano historycznego celu, dlatego nie jest uwzględniana w statystykach celu."
+          }
+        }
+      }
+    },
+    "No drink entries for this date" : {
+      "localizations" : {
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Brak wpisów napojów dla tej daty"
+          }
+        }
+      }
+    },
+    "A date without entries is missing information, not a zero-consumption day." : {
+      "localizations" : {
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dzień bez wpisów oznacza brak danych, a nie zerowe spożycie."
+          }
+        }
+      }
+    },
+    "Selected week" : {
+      "localizations" : {
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wybrany tydzień"
+          }
+        }
+      }
+    },
+    "Selected month" : {
+      "localizations" : {
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wybrany miesiąc"
+          }
+        }
+      }
+    },
+    "Recorded beverage total" : {
+      "localizations" : {
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Łączna objętość zapisanych napojów"
+          }
+        }
+      }
+    },
+    "No saved daily targets are available for recorded days in this period." : {
+      "localizations" : {
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Brak zapisanych celów dziennych dla dni z wpisami w tym okresie."
+          }
+        }
+      }
+    },
+    "Average per recorded day vs previous complete period" : {
+      "localizations" : {
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Średnia z dni z wpisami w porównaniu z poprzednim pełnym okresem"
+          }
+        }
+      }
+    },
+    "Month comparisons appear only when both months are complete and have recorded data." : {
+      "localizations" : {
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Porównanie miesięcy jest dostępne tylko wtedy, gdy oba miesiące są pełne i zawierają zapisane dane."
+          }
+        }
+      }
+    },
+    "No recorded drinks in this period. Missing days are not counted as zero." : {
+      "localizations" : {
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Brak zapisanych napojów w tym okresie. Dni bez wpisów nie są liczone jako zero."
+          }
+        }
+      }
+    },
+    "Daily bars show only dates with valid entries; the line appears only for dates with a saved estimate." : {
+      "localizations" : {
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Słupki dzienne pokazują tylko daty z prawidłowymi wpisami; linia oznacza daty z zapisanym oszacowaniem."
+          }
+        }
+      }
+    },
+    "Weekly bars are average beverage volume per recorded day. Weeks without entries are omitted." : {
+      "localizations" : {
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Słupki tygodniowe pokazują średnią objętość napojów na dzień z wpisem. Tygodnie bez wpisów są pomijane."
+          }
+        }
+      }
+    },
+    "Monthly bars are average beverage volume per recorded day. Months without entries are omitted; complete months alone are compared." : {
+      "localizations" : {
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Słupki miesięczne pokazują średnią objętość napojów na dzień z wpisem. Miesiące bez wpisów są pomijane; porównywane są tylko pełne miesiące."
+          }
+        }
+      }
+    },
+    "Recorded beverages" : {
+      "localizations" : {
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zapisane napoje"
+          }
+        }
+      }
+    },
+    "Saved estimate" : {
+      "localizations" : {
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zapisane oszacowanie"
+          }
+        }
+      }
+    },
+    "Series" : {
+      "localizations" : {
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Seria"
+          }
+        }
+      }
+    },
+    "Recorded beverage volume and saved daily estimate chart" : {
+      "localizations" : {
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wykres zapisanej objętości napojów i dziennego oszacowania"
+          }
+        }
+      }
+    },
+    "No eligible days with saved targets" : {
+      "localizations" : {
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Brak kwalifikujących się dni z zapisanym celem"
+          }
+        }
+      }
+    },
+    "Edit drink record" : {
+      "localizations" : {
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Edytuj wpis napoju"
+          }
+        }
+      }
+    },
+    "Delete drink record" : {
+      "localizations" : {
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Usuń wpis napoju"
+          }
+        }
+      }
+    },
+    "Actions for drink record" : {
+      "localizations" : {
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Czynności dotyczące wpisu napoju"
+          }
+        }
+      }
+    },
+    "Drink details" : {
+      "localizations" : {
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Szczegóły napoju"
+          }
+        }
+      }
+    },
+    "Beverage" : {
+      "localizations" : {
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Napój"
+          }
+        }
+      }
+    },
+    "Milk type" : {
+      "localizations" : {
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rodzaj mleka"
+          }
+        }
+      }
+    },
+    "Amount (ml)" : {
+      "localizations" : {
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ilość (ml)"
+          }
+        }
+      }
+    },
+    "Recorded time" : {
+      "localizations" : {
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Czas zapisu"
+          }
+        }
+      }
+    },
+    "Date and time" : {
+      "localizations" : {
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Data i godzina"
+          }
+        }
+      }
+    },
+    "Check the drink record" : {
+      "localizations" : {
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sprawdź wpis napoju"
+          }
+        }
+      }
+    },
+    "Enter a valid positive amount and date." : {
+      "localizations" : {
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wpisz prawidłową dodatnią ilość i datę."
+          }
+        }
+      }
+    },
+    "We couldn't save this drink record. Please try again." : {
+      "localizations" : {
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nie udało się zapisać wpisu napoju. Spróbuj ponownie."
+          }
+        }
+      }
+    },
+    "%lld calendar days covered" : {
+      "localizations" : {
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Liczba dni kalendarzowych w okresie: %lld"
+          }
+        }
+      }
+    },
+    "Average daily beverage volume across %lld days with entries" : {
+      "localizations" : {
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Średnia dzienna objętość napojów z %lld dni z wpisami"
+          }
+        }
+      }
+    },
+    "%lld of %lld recorded days with a saved target" : {
+      "localizations" : {
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$lld z %2$lld dni z wpisami i zapisanym celem"
+          }
+        }
+      }
+    },
+    "%lld calendar days have no entries; they are not counted as zero intake" : {
+      "localizations" : {
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld dni kalendarzowych nie ma wpisów; nie są liczone jako zerowe spożycie"
+          }
+        }
+      }
+    },
+    "%lld days" : {
+      "localizations" : {
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld dni"
+          }
+        }
+      }
+    },
+    "Recorded drinks for %@" : {
+      "localizations" : {
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zapisane napoje: %@"
+          }
+        }
+      }
+    },
+    "%@ (%lld days)" : {
+      "localizations" : {
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ (%2$lld dni)"
+          }
+        }
+      }
+    },
+    "%lld / %lld (%@)" : {
+      "localizations" : {
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$lld / %2$lld (%3$@)"
+          }
+        }
+      }
+    },
+    "%lld of %lld eligible recorded days" : {
+      "localizations" : {
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$lld z %2$lld kwalifikujących się dni z wpisami"
+          }
+        }
+      }
+    },
+    "Longest tracked goal streak" : {
+      "localizations" : {
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Najdłuższa seria osiągania celu przy kompletnych wpisach"
+          }
+        }
+      }
     }
   },
   "version" : "1.1"

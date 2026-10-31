@@ -28,11 +28,45 @@ struct MealPlannerView: View {
     @Environment(ProfileManager.self) private var profileManager
     @Environment(AuthManager.self) private var authManager
     @Environment(\.locale) private var locale
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @AppStorage("weekStartDay") private var weekStartDay: Int = 2
     
-    @State private var selectedDate: Date = Date().startOfDay
-    @State private var selectedViewMode: MealPlannerCalendarViewMode = .month
+    @State private var calendarSelection = MealPlannerCalendarSelection(selectedDate: Date().startOfDay)
     @State private var activeSheet: MealPlannerSheetRoute?
+
+    private var selectedDate: Date { calendarSelection.selectedDate }
+    private var selectedViewMode: MealPlannerCalendarViewMode { calendarSelection.viewMode }
+
+    private var calendarAnimation: Animation? {
+        let duration = MealPlannerCalendarMotion.duration(reduceMotion: reduceMotion)
+        return duration == 0 ? nil : .easeInOut(duration: duration)
+    }
+
+    private var calendarViewTransition: AnyTransition {
+        reduceMotion ? .identity : .opacity
+    }
+
+    private var selectedDateBinding: Binding<Date> {
+        Binding(
+            get: { calendarSelection.selectedDate },
+            set: { date in
+                withAnimation(calendarAnimation) {
+                    calendarSelection.selectDate(date, calendar: dateCalendar)
+                }
+            }
+        )
+    }
+
+    private var selectedViewModeBinding: Binding<MealPlannerCalendarViewMode> {
+        Binding(
+            get: { calendarSelection.viewMode },
+            set: { mode in
+                withAnimation(calendarAnimation) {
+                    calendarSelection.selectViewMode(mode)
+                }
+            }
+        )
+    }
     
     var availableRecipes: [Recipe] {
         recipeManager.userRecipes
@@ -72,7 +106,7 @@ struct MealPlannerView: View {
 
                 GeometryReader { geometry in
                     VStack(spacing: 12) {
-                        Picker("Calendar view", selection: $selectedViewMode) {
+                        Picker("Calendar view", selection: selectedViewModeBinding) {
                             ForEach(MealPlannerCalendarViewMode.allCases) { mode in
                                 Text(LocalizedStringKey(mode.title)).tag(mode)
                             }
@@ -83,6 +117,8 @@ struct MealPlannerView: View {
                         .accessibilityIdentifier("mealPlanner.viewMode")
 
                         calendarContent(width: geometry.size.width)
+                            .animation(calendarAnimation, value: selectedViewMode)
+                            .animation(calendarAnimation, value: selectedDate)
                     }
                     .frame(width: geometry.size.width, height: geometry.size.height, alignment: .top)
                 }
@@ -145,10 +181,13 @@ struct MealPlannerView: View {
                 .padding(.bottom, 20)
                 .wickedReadableWidth(820)
             }
+            .transition(calendarViewTransition)
         case .week:
             weeklyContent(width: width)
+                .transition(calendarViewTransition)
         case .month:
             monthContent(width: width)
+                .transition(calendarViewTransition)
         }
     }
 
@@ -167,11 +206,16 @@ struct MealPlannerView: View {
                     .foregroundStyle(.white)
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
-                Button("Today") { selectedDate = dateCalendar.startOfDay(for: Date()) }
+                Button("Today") {
+                    withAnimation(calendarAnimation) {
+                        calendarSelection.returnToToday(Date(), calendar: dateCalendar)
+                    }
+                }
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(Color.wickedGreen)
             }
             .frame(maxWidth: .infinity)
+            .simultaneousGesture(periodSwipeGesture)
 
             Button { moveSelection(by: 1) } label: {
                 Image(systemName: "chevron.right")
@@ -204,7 +248,7 @@ struct MealPlannerView: View {
             periodNavigation
             CalendarGrid(
                 currentMonthDate: selectedDate.startOfMonth,
-                selectedDate: $selectedDate,
+                selectedDate: selectedDateBinding,
                 entries: mealPlannerManager.allMealPlanEntries,
                 firstWeekday: weekStartDay
             )
@@ -262,6 +306,7 @@ struct MealPlannerView: View {
                         WeeklyDayCard(
                             date: day,
                             calendar: dateCalendar,
+                            isSelected: dateCalendar.isDate(day, inSameDayAs: selectedDate),
                             entries: entriesByDay[dateCalendar.startOfDay(for: day)] ?? [],
                             recipesById: recipesById,
                             onAddMeal: { showAddMeal(for: $0, on: day) },
@@ -278,24 +323,24 @@ struct MealPlannerView: View {
 
     private func showAddMeal(for mealType: String? = nil, on date: Date? = nil) {
         let targetDate = date ?? selectedDate
-        selectedDate = targetDate
+        selectedDateBinding.wrappedValue = targetDate
         activeSheet = .add(id: UUID(), date: targetDate, mealType: mealType)
     }
 
     private func moveSelection(by amount: Int) {
-        let component: Calendar.Component
-        switch selectedViewMode {
-        case .day: component = .day
-        case .week: component = .weekOfYear
-        case .month: component = .month
+        withAnimation(calendarAnimation) {
+            calendarSelection.navigate(by: amount, calendar: dateCalendar)
         }
+    }
 
-        if selectedViewMode == .month,
-           let updated = MealPlanningCalendar.monthDate(byAdding: amount, to: selectedDate, calendar: dateCalendar) {
-            selectedDate = updated
-        } else if let updated = dateCalendar.date(byAdding: component, value: amount, to: selectedDate) {
-            selectedDate = dateCalendar.startOfDay(for: updated)
-        }
+    private var periodSwipeGesture: some Gesture {
+        DragGesture(minimumDistance: 32)
+            .onEnded { value in
+                let horizontal = value.translation.width
+                guard abs(horizontal) > 64,
+                      abs(horizontal) > abs(value.translation.height) * 1.25 else { return }
+                moveSelection(by: horizontal < 0 ? 1 : -1)
+            }
     }
 }
 
@@ -523,6 +568,7 @@ private struct DailyMealsSection: View {
 private struct WeeklyDayCard: View {
     let date: Date
     let calendar: Calendar
+    let isSelected: Bool
     let entries: [MealPlanEntry]
     let recipesById: [String: Recipe]
     let onAddMeal: (String?) -> Void
@@ -589,7 +635,10 @@ private struct WeeklyDayCard: View {
         .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .stroke(isToday ? Color.wickedGreen.opacity(0.65) : Color.white.opacity(0.12), lineWidth: 1)
+                .stroke(
+                    isSelected ? Color.glindaPink : (isToday ? Color.wickedGreen.opacity(0.65) : Color.white.opacity(0.12)),
+                    lineWidth: isSelected ? 1.5 : 1
+                )
         }
     }
 }

@@ -651,6 +651,239 @@ final class RecipePlannerIOSTests: XCTestCase {
         XCTAssertFalse(WaterIntakeDay.contains(beforeMidnight, on: afterMidnight, calendar: calendar))
         XCTAssertTrue(WaterIntakeDay.contains(afterDaylightSavingTransition, on: afterMidnight, calendar: calendar))
     }
+
+    func testHydrationAnalyticsUsesEarliestValidEntryAndKeepsGapsOutOfRecordedAverages() throws {
+        let calendar = waterTestCalendar(timeZone: try XCTUnwrap(TimeZone(identifier: "Europe/Warsaw")))
+        let day27 = try fixedDate(2026, 10, 27, calendar: calendar)
+        let day29 = try fixedDate(2026, 10, 29, calendar: calendar)
+        let day30 = try fixedDate(2026, 10, 30, calendar: calendar)
+        let asOf = try fixedDate(2026, 10, 31, calendar: calendar)
+        let repeatedID = UUID(uuidString: "00000000-0000-0000-0000-000000000101")!
+        let records = [
+            makeWaterRecord(
+                documentID: "2026-10-27",
+                entries: [WaterEntry(id: repeatedID, amountMl: 250, timestamp: day27)],
+                targetDate: day27,
+                targetMl: 200,
+                targetRecordedAt: day27
+            ),
+            makeWaterRecord(
+                documentID: "2026-10-29",
+                entries: [
+                    WaterEntry(id: repeatedID, amountMl: 999, timestamp: day29),
+                    WaterEntry(amountMl: 1_500, timestamp: day29),
+                    WaterEntry(amountMl: .nan, timestamp: day29),
+                    WaterEntry(amountMl: .infinity, timestamp: day29)
+                ],
+                targetDate: day29,
+                targetMl: 1_000,
+                targetRecordedAt: day29
+            ),
+            makeWaterRecord(
+                documentID: "2026-10-30",
+                entries: [WaterEntry(amountMl: 500, timestamp: day30)],
+                targetDate: day30,
+                targetMl: 700,
+                targetRecordedAt: day30
+            )
+        ]
+
+        let result = HydrationAnalyticsService.summarize(records: records, calendar: calendar, asOf: asOf)
+
+        XCTAssertEqual(result.trackingStartDate, calendar.startOfDay(for: day27))
+        XCTAssertEqual(result.calendarDaysCovered, 5)
+        XCTAssertEqual(result.daysWithRecordedIntake, 3)
+        XCTAssertEqual(result.daysWithoutRecordedIntake, 2)
+        XCTAssertEqual(result.totalRecordedBeverageVolumeMl, 2_250, accuracy: 0.001)
+        XCTAssertEqual(try XCTUnwrap(result.averagePerRecordedDayMl), 750, accuracy: 0.001)
+        XCTAssertEqual(result.highestIntakeDay?.totalBeverageVolumeMl, 1_500)
+        XCTAssertEqual(result.lowestIntakeDay?.totalBeverageVolumeMl, 250)
+        XCTAssertEqual(result.eligibleGoalDays, 3)
+        XCTAssertEqual(result.daysMeetingGoal, 2)
+        XCTAssertEqual(try XCTUnwrap(result.goalAchievementRate), 2.0 / 3.0, accuracy: 0.000_001)
+        XCTAssertEqual(result.longestConsecutiveTrackedGoalDays, 1, "An unrecorded calendar day breaks a tracked streak.")
+        XCTAssertEqual(result.last7DayEligibleDays, 3)
+        XCTAssertEqual(result.last7DayGoalDays, 2)
+    }
+
+    func testHydrationAnalyticsUsesLatestSavedTargetAndNeverBackfillsMissingTargets() throws {
+        let calendar = waterTestCalendar(timeZone: try XCTUnwrap(TimeZone(secondsFromGMT: 0)))
+        let day = try fixedDate(2026, 10, 30, calendar: calendar)
+        let asOf = try fixedDate(2026, 10, 31, calendar: calendar)
+        let entry = WaterEntry(amountMl: 750, timestamp: day)
+        let records = [
+            makeWaterRecord(documentID: "2026-10-30", entries: [entry]),
+            makeWaterRecord(
+                documentID: "target-old",
+                entries: [],
+                targetDate: day,
+                targetMl: 500,
+                targetRecordedAt: try fixedLocalTime(on: day, hour: 9, minute: 0, calendar: calendar)
+            ),
+            makeWaterRecord(
+                documentID: "target-new",
+                entries: [],
+                targetDate: day,
+                targetMl: 1_000,
+                targetRecordedAt: try fixedLocalTime(on: day, hour: 10, minute: 0, calendar: calendar)
+            )
+        ]
+
+        let result = HydrationAnalyticsService.summarize(records: records, calendar: calendar, asOf: asOf)
+
+        XCTAssertEqual(result.dailySummaries.first?.targetMl, 1_000)
+        XCTAssertEqual(result.dailySummaries.first?.metTarget, false)
+        XCTAssertEqual(result.eligibleGoalDays, 1)
+        XCTAssertEqual(result.daysMeetingGoal, 0)
+        XCTAssertEqual(result.daysWithoutRecordedIntake, 1)
+
+        let noHistoricalTarget = HydrationAnalyticsService.summarize(
+            records: [makeWaterRecord(documentID: "2026-10-30", entries: [entry])],
+            calendar: calendar,
+            asOf: asOf
+        )
+        XCTAssertNil(noHistoricalTarget.dailySummaries.first?.targetMl)
+        XCTAssertNil(noHistoricalTarget.goalAchievementRate)
+    }
+
+    func testHydrationAnalyticsGroupsByLocalDaysAcrossDaylightSavingBoundary() throws {
+        let calendar = waterTestCalendar(timeZone: try XCTUnwrap(TimeZone(identifier: "America/Los_Angeles")))
+        let beforeLocalMidnight = WaterEntry(
+            amountMl: 250,
+            timestamp: try waterTestDate("2026-03-08T07:59:59Z")
+        )
+        let afterLocalMidnight = WaterEntry(
+            amountMl: 500,
+            timestamp: try waterTestDate("2026-03-08T08:00:00Z")
+        )
+        let asOf = try waterTestDate("2026-03-08T20:00:00Z")
+
+        let result = HydrationAnalyticsService.summarize(
+            records: [makeWaterRecord(documentID: "legacy", entries: [beforeLocalMidnight, afterLocalMidnight])],
+            calendar: calendar,
+            asOf: asOf
+        )
+
+        XCTAssertEqual(result.daysWithRecordedIntake, 2)
+        XCTAssertEqual(result.calendarDaysCovered, 2)
+        XCTAssertEqual(result.dailySummaries.map(\.totalBeverageVolumeMl), [250, 500])
+        XCTAssertEqual(result.dailySummaries.map { calendar.component(.day, from: $0.date) }, [7, 8])
+    }
+
+    func testHydrationDailyWeeklyAndMonthlyTrendsUseRecordedPeriodsAndCompareCompleteMonths() throws {
+        let timezone = try XCTUnwrap(TimeZone(identifier: "Europe/Warsaw"))
+        let calendar = MealPlanningCalendar.configured(locale: Locale(identifier: "pl_PL"), firstWeekday: 2, base: waterTestCalendar(timeZone: timezone))
+        let samples: [(Int, Int, Int, Double)] = [
+            (2026, 9, 1, 300),
+            (2026, 9, 21, 100),
+            (2026, 9, 28, 200),
+            (2026, 10, 5, 300),
+            (2026, 10, 12, 400)
+        ]
+        let records = try samples.map { year, month, day, amount in
+            let date = try fixedDate(year, month, day, calendar: calendar)
+            return makeWaterRecord(
+                documentID: WaterIntakeDay.documentID(for: date, calendar: calendar),
+                entries: [WaterEntry(amountMl: amount, timestamp: date)]
+            )
+        }
+        let asOf = try fixedDate(2026, 10, 31, calendar: calendar)
+        let result = HydrationAnalyticsService.summarize(records: records, calendar: calendar, asOf: asOf)
+
+        let weekly = try XCTUnwrap(result.weeklySummaries.first { calendar.component(.day, from: $0.startDate) == 28 && calendar.component(.month, from: $0.startDate) == 9 })
+        XCTAssertEqual(calendar.component(.weekday, from: weekly.startDate), 2)
+        XCTAssertEqual(weekly.recordedDays, 1)
+        XCTAssertEqual(try XCTUnwrap(weekly.averageDifferenceFromPreviousPeriodMl), 100, accuracy: 0.001)
+        XCTAssertEqual(result.monthlySummaries.count, 2)
+        let october = try XCTUnwrap(result.monthlySummaries.first { calendar.component(.month, from: $0.startDate) == 10 })
+        XCTAssertEqual(october.recordedDays, 2)
+        XCTAssertEqual(october.averagePerRecordedDayMl, 350)
+        XCTAssertEqual(try XCTUnwrap(october.averageDifferenceFromPreviousPeriodMl), 150, accuracy: 0.001)
+
+        let range = try XCTUnwrap(calendar.dateInterval(of: .weekOfYear, for: fixedDate(2026, 10, 5, calendar: calendar)))
+        let rows = HydrationAnalyticsService.dailySummaries(in: range, snapshot: result, calendar: calendar)
+        XCTAssertEqual(rows.map(\.totalBeverageVolumeMl), [300])
+        XCTAssertEqual(rows.map { calendar.component(.weekday, from: $0.date) }, [2])
+    }
+
+    func testHydrationEditAndDeleteHelpersRecalculateFromUpdatedRecords() throws {
+        let calendar = waterTestCalendar(timeZone: try XCTUnwrap(TimeZone(secondsFromGMT: 0)))
+        let firstDay = try fixedDate(2026, 10, 30, calendar: calendar)
+        let secondDay = try fixedDate(2026, 10, 31, calendar: calendar)
+        let original = WaterEntry(amountMl: 300, timestamp: firstDay)
+        let originalRecords = [makeWaterRecord(documentID: "2026-10-30", entries: [original])]
+        var edited = original
+        edited.amountMl = 900
+        edited.timestamp = secondDay
+
+        let updatedRecords = WaterIntakeDay.replacing(edited, in: originalRecords, userId: "water-test-user", calendar: calendar)
+        let editedSummary = HydrationAnalyticsService.summarize(records: updatedRecords, calendar: calendar, asOf: secondDay)
+        XCTAssertEqual(updatedRecords.count, 2, "The old calendar document remains with its entry removed.")
+        XCTAssertTrue(updatedRecords.contains { $0.id == "2026-10-30" && $0.entries.isEmpty })
+        XCTAssertEqual(updatedRecords.first?.id, "2026-10-31")
+        XCTAssertEqual(editedSummary.totalRecordedBeverageVolumeMl, 900)
+        XCTAssertEqual(editedSummary.trackingStartDate, calendar.startOfDay(for: secondDay))
+
+        let deletedRecords = WaterIntakeDay.removing(entryID: edited.id, from: updatedRecords)
+        let deletedSummary = HydrationAnalyticsService.summarize(records: deletedRecords, calendar: calendar, asOf: secondDay)
+        XCTAssertNil(deletedSummary.trackingStartDate)
+        XCTAssertEqual(deletedSummary.totalRecordedBeverageVolumeMl, 0)
+    }
+
+    func testMealCalendarModeChangesPreserveDateAndPeriodNavigationUsesSelectedMode() throws {
+        let timezone = try XCTUnwrap(TimeZone(identifier: "Europe/Warsaw"))
+        let calendar = MealPlanningCalendar.configured(
+            locale: Locale(identifier: "pl_PL"),
+            firstWeekday: 2,
+            base: waterTestCalendar(timeZone: timezone)
+        )
+        let selected = try fixedDate(2026, 11, 1, calendar: calendar)
+        var selection = MealPlannerCalendarSelection(selectedDate: selected, viewMode: .month, calendar: calendar)
+        let selectedDay = calendar.startOfDay(for: selected)
+
+        selection.selectViewMode(.week)
+        XCTAssertEqual(selection.selectedDate, selectedDay)
+        let selectedWeek = try XCTUnwrap(MealPlanningCalendar.dateRange(for: .week, containing: selection.selectedDate, calendar: calendar))
+        XCTAssertEqual(calendar.component(.weekday, from: selectedWeek.startDate), 2, "Polish weeks begin on Monday.")
+        XCTAssertTrue(selectedWeek.contains(selection.selectedDate, calendar: calendar))
+
+        selection.navigate(by: -1, calendar: calendar)
+        XCTAssertEqual(selection.selectedDate, calendar.startOfDay(for: try fixedDate(2026, 10, 25, calendar: calendar)))
+        selection.navigate(by: 1, calendar: calendar)
+        XCTAssertEqual(selection.selectedDate, selectedDay)
+
+        selection.selectViewMode(.day)
+        selection.navigate(by: 1, calendar: calendar)
+        let novemberSecond = try fixedDate(2026, 11, 2, calendar: calendar)
+        XCTAssertEqual(selection.selectedDate, calendar.startOfDay(for: novemberSecond))
+
+        selection.selectViewMode(.month)
+        XCTAssertEqual(selection.selectedDate, calendar.startOfDay(for: novemberSecond))
+        selection.returnToToday(selected, calendar: calendar)
+        XCTAssertEqual(selection.selectedDate, selectedDay)
+
+        selection.selectDate(try fixedDate(2026, 1, 31, calendar: calendar), calendar: calendar)
+        selection.navigate(by: 1, calendar: calendar)
+        XCTAssertEqual(calendar.component(.month, from: selection.selectedDate), 2)
+        XCTAssertEqual(calendar.component(.day, from: selection.selectedDate), 28)
+    }
+
+    func testMealCalendarSelectionKeepsPlannedEntriesAcrossModeSwitchesAndReduceMotion() throws {
+        let calendar = waterTestCalendar(timeZone: try XCTUnwrap(TimeZone(secondsFromGMT: 0)))
+        let date = try fixedDate(2026, 10, 30, calendar: calendar)
+        let entry = makePlannedMeal(id: "meal", recipeID: "recipe", date: date)
+        let week = try XCTUnwrap(MealPlanningCalendar.dateRange(for: .week, containing: date, calendar: calendar))
+        var selection = MealPlannerCalendarSelection(selectedDate: date, calendar: calendar)
+
+        for mode in MealPlannerCalendarViewMode.allCases {
+            selection.selectViewMode(mode)
+            XCTAssertEqual(MealPlanningCalendar.entries([entry], in: week, calendar: calendar).map(\.id), ["meal"])
+            XCTAssertEqual(selection.selectedDate, calendar.startOfDay(for: date))
+        }
+
+        XCTAssertEqual(MealPlannerCalendarMotion.duration(reduceMotion: true), 0)
+        XCTAssertGreaterThan(MealPlannerCalendarMotion.duration(reduceMotion: false), 0)
+    }
     
     // MARK: - Date Extension Tests
     
@@ -1114,10 +1347,20 @@ final class RecipePlannerIOSTests: XCTestCase {
         )
     }
 
-    private func makeWaterRecord(documentID: String, entries: [WaterEntry]) -> WaterRecord {
+    private func makeWaterRecord(
+        documentID: String,
+        entries: [WaterEntry],
+        targetDate: Date? = nil,
+        targetMl: Double? = nil,
+        targetRecordedAt: Date? = nil
+    ) -> WaterRecord {
         var record = WaterRecord.empty(userId: "water-test-user")
         record.id = documentID
         record.entries = entries
+        record.dailyTargetDate = targetDate
+        record.dailyTargetMl = targetMl
+        record.dailyTargetMethod = targetMl == nil ? nil : "test_snapshot"
+        record.dailyTargetRecordedAt = targetRecordedAt
         return record
     }
 

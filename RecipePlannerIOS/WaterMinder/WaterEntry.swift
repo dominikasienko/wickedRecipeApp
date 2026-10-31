@@ -65,8 +65,16 @@ struct WaterRecord: Codable, Identifiable {
     let amountMl: Double
     let timestamp: Date
 
+    /// Snapshot of the tracker estimate that applied on this record's local calendar day.
+    /// Older documents decode with nil and are deliberately excluded from historical goal rates.
+    var dailyTargetDate: Date? = nil
+    var dailyTargetMl: Double? = nil
+    var dailyTargetMethod: String? = nil
+    var dailyTargetRecordedAt: Date? = nil
+    var dailyTargetUnavailableReason: String? = nil
+
     var totalVolumeML: Double {
-        return entries.reduce(0) { $0 + $1.amountMl }
+        WaterIntakeDay.entries(in: [self]).reduce(0) { $0 + $1.amountMl }
     }
     
     var totalIntakeML: Double {
@@ -116,7 +124,12 @@ enum WaterIntakeDay {
         var seenIDs = Set<UUID>()
         return records
             .flatMap(\.entries)
-            .filter { seenIDs.insert($0.id).inserted }
+            .filter {
+                $0.amountMl.isFinite
+                    && $0.amountMl > 0
+                    && $0.timestamp.timeIntervalSince1970.isFinite
+                    && seenIDs.insert($0.id).inserted
+            }
     }
 
     static func appending(
@@ -145,6 +158,32 @@ enum WaterIntakeDay {
         }
 
         return updatedRecords.sorted { ($0.id ?? "") > ($1.id ?? "") }
+    }
+
+    static func replacing(
+        _ entry: WaterEntry,
+        in records: [WaterRecord],
+        userId: String,
+        calendar: Calendar = .autoupdatingCurrent
+    ) -> [WaterRecord] {
+        var updatedRecords = records
+        for index in updatedRecords.indices {
+            updatedRecords[index].entries.removeAll { $0.id == entry.id }
+        }
+        return appending(
+            entry,
+            documentID: documentID(for: entry.timestamp, calendar: calendar),
+            to: updatedRecords,
+            userId: userId
+        )
+    }
+
+    static func removing(entryID: UUID, from records: [WaterRecord]) -> [WaterRecord] {
+        records.map { record in
+            var updated = record
+            updated.entries.removeAll { $0.id == entryID }
+            return updated
+        }
     }
 
     static func entries(
