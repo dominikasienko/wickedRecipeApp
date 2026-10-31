@@ -155,8 +155,6 @@ struct SettingsView: View {
     
     @AppStorage("weekStartDay") private var weekStartDay: Int = WeekStartPreference.monday.rawValue
     @AppStorage("defaultMealType") private var defaultMealType: String = "breakfast"
-    @AppStorage("shoppingIncludeManualItems") private var shoppingIncludeManualItems: Bool = true
-    @AppStorage("shoppingPreserveCompletedState") private var shoppingPreserveCompletedState: Bool = true
     
     @AppStorage("hydrationDefaultDrinkTypeRaw") private var hydrationDefaultDrinkTypeRaw: String = HydrationDrinkType.water.rawValue
     @AppStorage("hydrationDefaultVolumeMl") private var hydrationDefaultVolumeMl: Double = 250
@@ -608,13 +606,6 @@ struct SettingsView: View {
             }
             .listRowBackground(Color.black.opacity(0.2))
 
-            Toggle("Include manual shopping items on regenerate", isOn: $shoppingIncludeManualItems)
-                .listRowBackground(Color.black.opacity(0.2))
-                .tint(.wickedGreen)
-
-            Toggle("Preserve checked shopping items", isOn: $shoppingPreserveCompletedState)
-                .listRowBackground(Color.black.opacity(0.2))
-                .tint(.wickedGreen)
         }
     }
 
@@ -926,7 +917,7 @@ struct SettingsView: View {
     private func handleLogout() {
         do {
             try authManager.signOut()
-            shoppingListManager.clearAll()
+            shoppingListManager.clearLocalData()
             notificationManager.cancelAllWaterReminders()
         } catch {
             deletionErrorMessage = AppLocalization.key("We couldn't sign you out. Please try again.")
@@ -1041,8 +1032,8 @@ struct SettingsView: View {
             hydrationFavoriteDrinkIDs: hydrationFavoriteDrinkIDsRaw,
             defaultMealType: defaultMealType,
             weekStartDay: weekStartDay,
-            shoppingIncludeManualItems: shoppingIncludeManualItems,
-            shoppingPreserveCompletedState: shoppingPreserveCompletedState
+            shoppingIncludeManualItems: true,
+            shoppingPreserveCompletedState: true
         )
 
         let payload = ExportPayload(

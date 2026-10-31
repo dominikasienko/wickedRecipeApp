@@ -670,6 +670,437 @@ final class RecipePlannerIOSTests: XCTestCase {
         XCTAssertEqual(components.minute, 0)
     }
 
+    // MARK: - Meal Planning Calendar Tests
+
+    func testPolishCalendarWeeksStartOnMondayAndContainSevenLocalDays() throws {
+        let timezone = try XCTUnwrap(TimeZone(identifier: "Europe/Warsaw"))
+        var base = Calendar(identifier: .gregorian)
+        base.timeZone = timezone
+        let polishCalendar = MealPlanningCalendar.configured(
+            locale: Locale(identifier: "pl_PL"),
+            base: base
+        )
+        let sunday = try fixedDate(2026, 3, 29, calendar: polishCalendar)
+        let range = try XCTUnwrap(MealPlanningCalendar.dateRange(for: .week, containing: sunday, calendar: polishCalendar))
+        let dates = MealPlanningCalendar.dates(in: range, calendar: polishCalendar)
+
+        XCTAssertEqual(polishCalendar.firstWeekday, 2)
+        XCTAssertEqual(dates.count, 7)
+        XCTAssertEqual(polishCalendar.component(.weekday, from: dates.first!), 2)
+        XCTAssertEqual(polishCalendar.component(.weekday, from: dates.last!), 1)
+        XCTAssertEqual(range.lastDay(calendar: polishCalendar), dates.last)
+        XCTAssertEqual(range.endDateExclusive.timeIntervalSince(range.startDate), 167 * 60 * 60, accuracy: 1)
+    }
+
+    func testMealCalendarMonthBoundariesLeapYearsAndClampedNavigation() throws {
+        let calendar = waterTestCalendar(timeZone: try XCTUnwrap(TimeZone(secondsFromGMT: 0)))
+        let february = try fixedDate(2024, 2, 14, calendar: calendar)
+        let range = try XCTUnwrap(MealPlanningCalendar.dateRange(for: .month, containing: february, calendar: calendar))
+        XCTAssertEqual(MealPlanningCalendar.dates(in: range, calendar: calendar).count, 29)
+        XCTAssertEqual(calendar.component(.day, from: range.lastDay(calendar: calendar)), 29)
+
+        let january31 = try fixedDate(2024, 1, 31, calendar: calendar)
+        let february29 = try XCTUnwrap(MealPlanningCalendar.monthDate(byAdding: 1, to: january31, calendar: calendar))
+        XCTAssertEqual(calendar.component(.month, from: february29), 2)
+        XCTAssertEqual(calendar.component(.day, from: february29), 29)
+    }
+
+    func testMealEntriesAreFilteredByInclusiveLocalCalendarPeriod() throws {
+        let timezone = try XCTUnwrap(TimeZone(identifier: "Europe/Warsaw"))
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = timezone
+        calendar.locale = Locale(identifier: "pl_PL")
+        calendar.firstWeekday = 2
+        let anchor = try fixedDate(2026, 3, 29, calendar: calendar)
+        let range = try XCTUnwrap(MealPlanningCalendar.dateRange(for: .week, containing: anchor, calendar: calendar))
+        let monday = try fixedDate(2026, 3, 23, calendar: calendar)
+        let nextMonday = try fixedDate(2026, 3, 30, calendar: calendar)
+        let inside = makePlannedMeal(id: "inside", recipeID: "recipe", date: monday)
+        let lastDayLate = try fixedLocalTime(on: range.lastDay(calendar: calendar), hour: 23, minute: 59, calendar: calendar)
+        let sunday = makePlannedMeal(id: "last-day", recipeID: "recipe", date: lastDayLate)
+        let outside = makePlannedMeal(id: "outside", recipeID: "recipe", date: nextMonday)
+
+        let result = MealPlanningCalendar.entries([inside, sunday, outside], in: range, calendar: calendar)
+        XCTAssertEqual(Set(result.compactMap(\.id)), ["inside", "last-day"])
+    }
+
+    func testMealPlanEntryValidationAndIndependentEditValues() throws {
+        let date = Date(timeIntervalSince1970: 1_800_000_000)
+        var first = makePlannedMeal(id: "one", recipeID: "recipe-a", date: date, servings: 2)
+        let second = makePlannedMeal(id: "two", recipeID: "recipe-a", date: date, servings: 1)
+        try MealPlannerManager.validate(entry: first, authenticatedUserID: "test-user")
+        try MealPlannerManager.validate(entry: second, authenticatedUserID: "test-user")
+
+        first.date = date.addingTimeInterval(86_400)
+        first.mealType = "dinner"
+        first.plannedServings = 4
+
+        XCTAssertEqual(first.id, "one")
+        XCTAssertEqual(first.plannedServings, 4)
+        XCTAssertEqual(second.plannedServings, 1)
+        XCTAssertEqual(second.date, date)
+        XCTAssertThrowsError(try MealPlannerManager.validate(entry: first, authenticatedUserID: "another-user"))
+        first.plannedServings = 0
+        XCTAssertThrowsError(try MealPlannerManager.validate(entry: first, authenticatedUserID: "test-user"))
+    }
+
+    // MARK: - Shopping List Ingredient Aggregation Tests
+
+    func testShoppingListCombinesNameFormattingAndAddsGramAmounts() throws {
+        let date = Date(timeIntervalSince1970: 1_800_000_000)
+        let recipes = [
+            makeMealRecipe(id: "a", name: "Recipe A", servings: 2, ingredients: [Ingredient(name: " Flour ", quantity: 200, unit: "g")]),
+            makeMealRecipe(id: "b", name: "Recipe B", servings: 2, ingredients: [Ingredient(name: "flour", quantity: 300, unit: "grams")])
+        ]
+        let entries = [
+            makePlannedMeal(id: "meal-a", recipeID: "a", date: date, servings: 2),
+            makePlannedMeal(id: "meal-b", recipeID: "b", date: date, servings: 2)
+        ]
+
+        let items = ShoppingListGenerator.generate(from: entries, recipes: recipes)
+        let flour = try XCTUnwrap(items.first { $0.name.localizedCaseInsensitiveContains("flour") })
+        XCTAssertEqual(items.count, 1)
+        XCTAssertEqual(flour.quantity, 500, accuracy: 0.000_001)
+        XCTAssertEqual(flour.unit, "g")
+        XCTAssertEqual(Set(flour.sourceRecipeIDs ?? []), ["a", "b"])
+    }
+
+    func testShoppingListNormalizesMassVolumeAndCountUnits() throws {
+        let date = Date(timeIntervalSince1970: 1_800_000_000)
+        let recipes = [
+            makeMealRecipe(id: "a", name: "A", servings: 1, ingredients: [
+                Ingredient(name: "flour", quantity: 500, unit: "g"),
+                Ingredient(name: "milk", quantity: 250, unit: "ml"),
+                Ingredient(name: "egg", quantity: 2, unit: "pieces")
+            ]),
+            makeMealRecipe(id: "b", name: "B", servings: 1, ingredients: [
+                Ingredient(name: " FLOUR ", quantity: 0.5, unit: "kg"),
+                Ingredient(name: "Milk", quantity: 0.5, unit: "l"),
+                Ingredient(name: "egg", quantity: 3, unit: "pcs")
+            ])
+        ]
+        let entries = ["a", "b"].enumerated().map {
+            makePlannedMeal(id: "meal-\($0.offset)", recipeID: $0.element, date: date)
+        }
+        let items = ShoppingListGenerator.generate(from: entries, recipes: recipes)
+
+        XCTAssertEqual(try XCTUnwrap(items.first { $0.name.lowercased() == "flour" }).quantity, 1_000, accuracy: 0.000_001)
+        XCTAssertEqual(try XCTUnwrap(items.first { $0.name.lowercased() == "flour" }).unit, "g")
+        XCTAssertEqual(try XCTUnwrap(items.first { $0.name.lowercased() == "milk" }).quantity, 750, accuracy: 0.000_001)
+        XCTAssertEqual(try XCTUnwrap(items.first { $0.name.lowercased() == "milk" }).unit, "ml")
+        XCTAssertEqual(try XCTUnwrap(items.first { $0.name.lowercased() == "egg" }).quantity, 5, accuracy: 0.000_001)
+        XCTAssertEqual(try XCTUnwrap(items.first { $0.name.lowercased() == "egg" }).unit, "piece")
+    }
+
+    func testShoppingListKeepsDifferentIngredientsAndDimensionsSeparate() {
+        let date = Date(timeIntervalSince1970: 1_800_000_000)
+        let recipe = makeMealRecipe(id: "a", name: "A", servings: 1, ingredients: [
+            Ingredient(name: "wheat flour", quantity: 200, unit: "g"),
+            Ingredient(name: "almond flour", quantity: 100, unit: "g"),
+            Ingredient(name: "milk", quantity: 200, unit: "g"),
+            Ingredient(name: "milk", quantity: 100, unit: "ml"),
+            Ingredient(name: "fresh basil", quantity: 4, unit: "g"),
+            Ingredient(name: "dried basil", quantity: 2, unit: "g")
+        ])
+
+        let items = ShoppingListGenerator.generate(
+            from: [makePlannedMeal(id: "meal", recipeID: "a", date: date)],
+            recipes: [recipe]
+        )
+        XCTAssertEqual(items.count, 6)
+        XCTAssertEqual(items.filter { $0.name == "milk" }.count, 2)
+        XCTAssertEqual(items.filter { $0.name.contains("flour") }.count, 2)
+    }
+
+    func testShoppingListScalesPlannedServingsBeforeAggregationAcrossRecipes() throws {
+        let date = Date(timeIntervalSince1970: 1_800_000_000)
+        let recipes = [
+            makeMealRecipe(id: "a", name: "A", servings: 2, ingredients: [Ingredient(name: "rice", quantity: 200, unit: "g")]),
+            makeMealRecipe(id: "b", name: "B", servings: 4, ingredients: [Ingredient(name: "rice", quantity: 200, unit: "g")])
+        ]
+        let entries = [
+            makePlannedMeal(id: "meal-a", recipeID: "a", date: date, servings: 4),
+            makePlannedMeal(id: "meal-b", recipeID: "b", date: date, servings: 2)
+        ]
+        let rice = try XCTUnwrap(ShoppingListGenerator.generate(from: entries, recipes: recipes).first)
+        XCTAssertEqual(rice.quantity, 500, accuracy: 0.000_001)
+    }
+
+    func testRepeatedRecipeAssignmentsAreCountedIndependently() throws {
+        let date = Date(timeIntervalSince1970: 1_800_000_000)
+        let recipe = makeMealRecipe(id: "a", name: "A", servings: 2, ingredients: [Ingredient(name: "oats", quantity: 100, unit: "g")])
+        let entries = [
+            makePlannedMeal(id: "meal-1", recipeID: "a", date: date, servings: 2),
+            makePlannedMeal(id: "meal-2", recipeID: "a", date: date, servings: 4)
+        ]
+        let oats = try XCTUnwrap(ShoppingListGenerator.generate(from: entries, recipes: [recipe]).first)
+        XCTAssertEqual(oats.quantity, 300, accuracy: 0.000_001)
+        XCTAssertEqual(Set(oats.sourceMealEntryIDs ?? []), ["meal-1", "meal-2"])
+    }
+
+    func testShoppingListUsesSectionIngredientsWithoutDoubleCountingFlatCopy() throws {
+        let date = Date(timeIntervalSince1970: 1_800_000_000)
+        var recipe = makeMealRecipe(
+            id: "sectioned",
+            name: "Layered recipe",
+            servings: 2,
+            ingredients: [Ingredient(name: "flour", quantity: 200, unit: "g")]
+        )
+        recipe.sections = [
+            RecipeSection(
+                title: "Dough",
+                ingredients: [
+                    Ingredient(name: "flour", quantity: 200, unit: "g"),
+                    Ingredient(name: "salt", quantity: 3, unit: "g")
+                ],
+                instructions: []
+            )
+        ]
+
+        let items = ShoppingListGenerator.generate(
+            from: [makePlannedMeal(id: "meal", recipeID: "sectioned", date: date, servings: 2)],
+            recipes: [recipe]
+        )
+        XCTAssertEqual(items.count, 2)
+        XCTAssertEqual(try XCTUnwrap(items.first { $0.name == "flour" }).quantity, 200, accuracy: 0.000_001)
+        XCTAssertEqual(try XCTUnwrap(items.first { $0.name == "salt" }).quantity, 3, accuracy: 0.000_001)
+    }
+
+    func testShoppingListPreservesUnquantifiedInvalidAndUnscaledIngredients() throws {
+        let date = Date(timeIntervalSince1970: 1_800_000_000)
+        let recipes = [
+            makeMealRecipe(id: "unknown-servings", name: "Legacy", servings: 0, ingredients: [Ingredient(name: "flour", quantity: 200, unit: "g")]),
+            makeMealRecipe(id: "unknown-amount", name: "Taste", servings: 2, ingredients: [Ingredient(name: "salt", quantity: 0, unit: "to taste")]),
+            makeMealRecipe(id: "invalid", name: "Invalid", servings: 2, ingredients: [Ingredient(name: "pepper", quantity: .nan, unit: "g")]),
+            makeMealRecipe(id: "unitless", name: "Unitless", servings: 2, ingredients: [Ingredient(name: "spice", quantity: 3, unit: "")])
+        ]
+        let entries = recipes.map { recipe in
+            makePlannedMeal(id: "meal-\(recipe.id!)", recipeID: recipe.id!, date: date, servings: 4)
+        }
+        let items = ShoppingListGenerator.generate(from: entries, recipes: recipes)
+
+        let flour = try XCTUnwrap(items.first { $0.name == "flour" })
+        XCTAssertEqual(flour.quantity, 200, accuracy: 0.000_001)
+        XCTAssertNotNil(flour.quantityNote)
+        XCTAssertEqual(items.first { $0.name == "salt" }?.unit, "to taste")
+        XCTAssertEqual(items.first { $0.name == "pepper" }?.quantity, 0)
+        let spice = try XCTUnwrap(items.first { $0.name == "spice" })
+        XCTAssertEqual(spice.quantity, 6, accuracy: 0.000_001)
+        XCTAssertTrue(spice.unit.isEmpty)
+        XCTAssertNotNil(spice.generationKey)
+    }
+
+    func testShoppingListPeriodExcludesRecipesOutsideLocalDateRange() throws {
+        let timezone = try XCTUnwrap(TimeZone(identifier: "Europe/Warsaw"))
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = timezone
+        let monday = try fixedDate(2026, 10, 26, calendar: calendar)
+        let nextMonday = try fixedDate(2026, 11, 2, calendar: calendar)
+        let range = try XCTUnwrap(MealPlanningCalendar.dateRange(for: .week, containing: monday, calendar: calendar))
+        let recipes = [
+            makeMealRecipe(id: "inside", name: "Inside", servings: 1, ingredients: [Ingredient(name: "pear", quantity: 2, unit: "piece")]),
+            makeMealRecipe(id: "outside", name: "Outside", servings: 1, ingredients: [Ingredient(name: "plum", quantity: 3, unit: "piece")])
+        ]
+        let lastDayDate = try fixedLocalTime(on: range.lastDay(calendar: calendar), hour: 23, minute: 59, calendar: calendar)
+        let lastDay = makePlannedMeal(id: "last", recipeID: "inside", date: lastDayDate)
+        let outside = makePlannedMeal(id: "outside", recipeID: "outside", date: nextMonday)
+        let items = ShoppingListGenerator.generate(from: [lastDay, outside], recipes: recipes, within: range, calendar: calendar)
+
+        XCTAssertEqual(items.count, 1)
+        XCTAssertEqual(items.first?.name, "pear")
+    }
+
+    func testMealPlanPeriodGenerationIntegratesScalingAggregationAndRecipeRefresh() throws {
+        let suiteName = "ShoppingListWorkflowTests-\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        let timezone = try XCTUnwrap(TimeZone(identifier: "Europe/Warsaw"))
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = timezone
+        calendar.locale = Locale(identifier: "pl_PL")
+        calendar.firstWeekday = 2
+
+        let monday = try fixedDate(2026, 10, 26, calendar: calendar)
+        let nextMonday = try fixedDate(2026, 11, 2, calendar: calendar)
+        let range = try XCTUnwrap(MealPlanningCalendar.dateRange(for: .week, containing: monday, calendar: calendar))
+        let firstRecipe = makeMealRecipe(
+            id: "first",
+            name: "Bread",
+            servings: 2,
+            ingredients: [Ingredient(name: "flour", quantity: 200, unit: "g")]
+        )
+        let secondRecipe = makeMealRecipe(
+            id: "second",
+            name: "Pancakes",
+            servings: 5,
+            ingredients: [Ingredient(name: " Flour ", quantity: 0.5, unit: "kg")]
+        )
+        let outsideRecipe = makeMealRecipe(
+            id: "outside",
+            name: "Soup",
+            servings: 1,
+            ingredients: [Ingredient(name: "salt", quantity: 10, unit: "g")]
+        )
+        let firstEntry = makePlannedMeal(id: "meal-first", recipeID: "first", date: monday, servings: 4)
+        let secondEntry = makePlannedMeal(id: "meal-second", recipeID: "second", date: monday.addingTimeInterval(86_400), servings: 5)
+        let outsideEntry = makePlannedMeal(id: "meal-outside", recipeID: "outside", date: nextMonday)
+        let manager = ShoppingListManager(defaults: defaults, userID: "workflow-user")
+
+        manager.regenerate(
+            from: [firstEntry, secondEntry, outsideEntry],
+            recipes: [firstRecipe, secondRecipe, outsideRecipe],
+            within: range,
+            calendar: calendar
+        )
+        var flour = try XCTUnwrap(manager.shoppingList.first { $0.name.trimmingCharacters(in: .whitespaces).lowercased() == "flour" })
+        XCTAssertEqual(flour.quantity, 900, accuracy: 0.000_001)
+        XCTAssertEqual(flour.unit, "g")
+        XCTAssertEqual(Set(flour.sourceMealEntryIDs ?? []), ["meal-first", "meal-second"])
+        XCTAssertFalse(manager.shoppingList.contains(where: { $0.name == "salt" }))
+
+        manager.toggleCompletion(flour)
+        var updatedFirstRecipe = firstRecipe
+        updatedFirstRecipe.ingredients = [Ingredient(name: "flour", quantity: 300, unit: "g")]
+        manager.regenerate(
+            from: [firstEntry, secondEntry, outsideEntry],
+            recipes: [updatedFirstRecipe, secondRecipe, outsideRecipe],
+            within: range,
+            calendar: calendar
+        )
+        flour = try XCTUnwrap(manager.shoppingList.first { $0.name.lowercased() == "flour" })
+        XCTAssertEqual(flour.quantity, 1_100, accuracy: 0.000_001)
+        XCTAssertTrue(flour.isCompleted)
+
+        var movedSecondEntry = secondEntry
+        movedSecondEntry.date = nextMonday
+        manager.regenerate(
+            from: [firstEntry, movedSecondEntry, outsideEntry],
+            recipes: [updatedFirstRecipe, secondRecipe, outsideRecipe],
+            within: range,
+            calendar: calendar
+        )
+        flour = try XCTUnwrap(manager.shoppingList.first { $0.name.lowercased() == "flour" })
+        XCTAssertEqual(flour.quantity, 600, accuracy: 0.000_001)
+        XCTAssertEqual(Set(flour.sourceMealEntryIDs ?? []), ["meal-first"])
+        XCTAssertFalse(manager.shoppingList.contains(where: { $0.name == "salt" }))
+    }
+
+    func testShoppingListReconciliationPreservesEditsPurchaseCustomAndRemoval() throws {
+        let suiteName = "ShoppingListTests-\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let calendar = waterTestCalendar(timeZone: try XCTUnwrap(TimeZone(secondsFromGMT: 0)))
+        let day = try fixedDate(2026, 10, 30, calendar: calendar)
+        let range = try XCTUnwrap(MealPlanningCalendar.dateRange(for: .day, containing: day, calendar: calendar))
+        let recipe = makeMealRecipe(id: "recipe", name: "Soup", servings: 2, ingredients: [
+            Ingredient(name: "carrot", quantity: 200, unit: "g"),
+            Ingredient(name: "salt", quantity: 2, unit: "g")
+        ])
+        let entry = makePlannedMeal(id: "meal", recipeID: "recipe", date: day, servings: 2)
+        let manager = ShoppingListManager(defaults: defaults, userID: "user-a")
+        manager.regenerate(from: [entry], recipes: [recipe], within: range, calendar: calendar)
+
+        var carrot = try XCTUnwrap(manager.shoppingList.first { $0.name == "carrot" })
+        carrot.name = "Carrot, edited"
+        carrot.quantity = 250
+        carrot.isManuallyEdited = true
+        manager.updateItem(carrot)
+        let salt = try XCTUnwrap(manager.shoppingList.first { $0.name == "salt" })
+        manager.toggleCompletion(salt)
+        manager.deleteItem(carrot)
+        manager.addItem(ShoppingListItem(name: "Coffee", quantity: 1, unit: "bag", isManuallyAdded: true))
+
+        manager.regenerate(from: [entry], recipes: [recipe], within: range, calendar: calendar)
+        XCTAssertTrue(manager.shoppingList.contains(where: { $0.isExcludedFromGeneration && $0.name == "Carrot, edited" }))
+        XCTAssertTrue(manager.shoppingList.contains(where: { $0.name == "Coffee" && $0.isManuallyAdded }))
+        XCTAssertTrue(manager.shoppingList.contains(where: { $0.name == "salt" && $0.isCompleted }))
+        XCTAssertFalse(manager.shoppingList.contains(where: { $0.name == "carrot" && !$0.isExcludedFromGeneration }))
+
+        let restored = ShoppingListManager(defaults: defaults, userID: "user-a")
+        XCTAssertEqual(restored.shoppingList, manager.shoppingList)
+        let otherUser = ShoppingListManager(defaults: defaults, userID: "user-b")
+        XCTAssertTrue(otherUser.shoppingList.isEmpty)
+    }
+
+    func testShoppingListChangesPeriodWithoutReintroducingCustomItems() throws {
+        let suiteName = "ShoppingListPeriodTests-\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let calendar = waterTestCalendar(timeZone: try XCTUnwrap(TimeZone(secondsFromGMT: 0)))
+        let firstDay = try fixedDate(2026, 10, 30, calendar: calendar)
+        let nextDay = calendar.date(byAdding: .day, value: 1, to: firstDay)!
+        let dayRange = try XCTUnwrap(MealPlanningCalendar.dateRange(for: .day, containing: firstDay, calendar: calendar))
+        let nextRange = try XCTUnwrap(MealPlanningCalendar.dateRange(for: .day, containing: nextDay, calendar: calendar))
+        let recipe = makeMealRecipe(id: "recipe", name: "Pasta", servings: 1, ingredients: [Ingredient(name: "pasta", quantity: 100, unit: "g")])
+        let entry = makePlannedMeal(id: "meal", recipeID: "recipe", date: firstDay)
+        let manager = ShoppingListManager(defaults: defaults, userID: "user")
+        manager.regenerate(from: [entry], recipes: [recipe], within: dayRange, calendar: calendar)
+        manager.deleteItem(try XCTUnwrap(manager.shoppingList.first { $0.name == "pasta" }))
+        manager.addItem(ShoppingListItem(name: "Tea", quantity: 0, unit: "", isManuallyAdded: true))
+
+        manager.regenerate(from: [entry], recipes: [recipe], within: nextRange, calendar: calendar)
+        XCTAssertFalse(manager.shoppingList.contains(where: { $0.name == "pasta" }))
+        XCTAssertTrue(manager.shoppingList.contains(where: { $0.name == "Tea" }))
+        XCTAssertFalse(manager.shoppingList.contains(where: \.isExcludedFromGeneration))
+    }
+
+    func testLegacyShoppingListItemsDecodeWithNewOptionalMetadata() throws {
+        let json = """
+        [{"id":"00000000-0000-0000-0000-000000000001","name":"Old item","quantity":2,"unit":"piece","isCompleted":true,"isManuallyAdded":false,"recipeSources":["Old recipe"]}]
+        """.data(using: .utf8)!
+        let item = try XCTUnwrap(JSONDecoder().decode([ShoppingListItem].self, from: json).first)
+        XCTAssertEqual(item.name, "Old item")
+        XCTAssertTrue(item.isCompleted)
+        XCTAssertFalse(item.isManuallyEdited)
+        XCTAssertFalse(item.isExcludedFromGeneration)
+        XCTAssertNil(item.generationKey)
+    }
+
+    private func makeMealRecipe(id: String, name: String, servings: Int, ingredients: [Ingredient]) -> Recipe {
+        Recipe(
+            id: id,
+            userId: "test-user",
+            name: name,
+            category: "BASICS",
+            preparationTimeMinutes: 10,
+            servings: servings,
+            ingredients: ingredients,
+            instructions: []
+        )
+    }
+
+    private func makePlannedMeal(
+        id: String,
+        recipeID: String,
+        date: Date,
+        servings: Int = 1,
+        mealType: String = "breakfast"
+    ) -> MealPlanEntry {
+        var entry = MealPlanEntry(
+            userId: "test-user",
+            date: date,
+            mealType: mealType,
+            recipeId: recipeID,
+            recipeName: recipeID,
+            plannedServings: servings
+        )
+        entry.id = id
+        entry.date = date
+        return entry
+    }
+
+    private func fixedDate(_ year: Int, _ month: Int, _ day: Int, calendar: Calendar) throws -> Date {
+        try XCTUnwrap(calendar.date(from: DateComponents(year: year, month: month, day: day, hour: 12)))
+    }
+
+    private func fixedLocalTime(on date: Date, hour: Int, minute: Int, calendar: Calendar) throws -> Date {
+        var components = calendar.dateComponents([.era, .year, .month, .day], from: date)
+        components.hour = hour
+        components.minute = minute
+        return try XCTUnwrap(calendar.date(from: components))
+    }
+
     private func makeRecipe(id: String, userId: String) -> Recipe {
         Recipe(
             id: id,

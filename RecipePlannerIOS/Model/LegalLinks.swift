@@ -54,5 +54,8 @@ enum AppPreferenceStore {
 
     static func resetAfterAccountDeletion(defaults: UserDefaults = .standard) {
         accountPreferenceKeys.forEach(defaults.removeObject(forKey:))
+        defaults.dictionaryRepresentation().keys
+            .filter { $0.hasPrefix("ShoppingListItems.") || $0.hasPrefix("ShoppingListDates.") }
+            .forEach(defaults.removeObject(forKey:))
     }
 }

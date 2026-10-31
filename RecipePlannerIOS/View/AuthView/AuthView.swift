@@ -148,6 +148,7 @@ struct AuthView: View {
               loadedUserID != userID,
               loadingUserID != userID else { return }
         loadingUserID = userID
+        shoppingListManager.load(forUserID: userID)
 
         Task {
             do {
@@ -248,7 +249,7 @@ struct AuthView: View {
         loadingUserID = nil
         profileManager.clearLocalData()
         recipeManager.clearLocalData()
-        shoppingListManager.clearAll()
+        shoppingListManager.clearLocalData()
     }
 }
 

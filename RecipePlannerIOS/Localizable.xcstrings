@@ -19962,6 +19962,616 @@
           }
         }
       }
+    },
+    "Calendar view" : {
+      "localizations": {
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Widok kalendarza"
+          }
+        }
+      }
+    },
+    "Day" : {
+      "localizations": {
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dzień"
+          }
+        }
+      }
+    },
+    "Week" : {
+      "localizations": {
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tydzień"
+          }
+        }
+      }
+    },
+    "Month" : {
+      "localizations": {
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Miesiąc"
+          }
+        }
+      }
+    },
+    "Previous period" : {
+      "localizations": {
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Poprzedni okres"
+          }
+        }
+      }
+    },
+    "Next period" : {
+      "localizations": {
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Następny okres"
+          }
+        }
+      }
+    },
+    "Today" : {
+      "localizations": {
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dzisiaj"
+          }
+        }
+      }
+    },
+    "Calendar unavailable" : {
+      "localizations": {
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kalendarz jest niedostępny"
+          }
+        }
+      }
+    },
+    "Choose a meal category below to plan a recipe for this day." : {
+      "localizations": {
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wybierz poniżej porę posiłku, aby zaplanować przepis na ten dzień."
+          }
+        }
+      }
+    },
+    "No recipe planned" : {
+      "localizations": {
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nie zaplanowano przepisu"
+          }
+        }
+      }
+    },
+    "Add meal" : {
+      "localizations": {
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dodaj posiłek"
+          }
+        }
+      }
+    },
+    "Add" : {
+      "localizations": {
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dodaj"
+          }
+        }
+      }
+    },
+    "Edit planned meal" : {
+      "localizations": {
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Edytuj zaplanowany posiłek"
+          }
+        }
+      }
+    },
+    "Remove planned meal" : {
+      "localizations": {
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Usuń zaplanowany posiłek"
+          }
+        }
+      }
+    },
+    "Plan a meal" : {
+      "localizations": {
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zaplanuj posiłek"
+          }
+        }
+      }
+    },
+    "Plan this recipe" : {
+      "localizations": {
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zaplanuj ten przepis"
+          }
+        }
+      }
+    },
+    "Planned servings: **%lld**" : {
+      "localizations": {
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Planowana liczba porcji: **%lld**"
+          }
+        }
+      }
+    },
+    "This recipe makes %lld servings. Choose the number planned for this meal." : {
+      "localizations": {
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ten przepis jest na %lld porcji. Wybierz liczbę porcji zaplanowanych na ten posiłek."
+          }
+        }
+      }
+    },
+    "The original recipe is no longer available. You can update this meal or choose a replacement recipe." : {
+      "localizations": {
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Oryginalny przepis nie jest już dostępny. Możesz zmienić ten posiłek lub wybrać inny przepis."
+          }
+        }
+      }
+    },
+    "Choose a saved recipe and make sure you are signed in." : {
+      "localizations": {
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wybierz zapisany przepis i upewnij się, że jesteś zalogowana(-y)."
+          }
+        }
+      }
+    },
+    "The meal plan could not be saved. Check your connection and try again." : {
+      "localizations": {
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nie udało się zapisać planu posiłków. Sprawdź połączenie i spróbuj ponownie."
+          }
+        }
+      }
+    },
+    "This recipe is already planned for this meal" : {
+      "localizations": {
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ten przepis jest już zaplanowany na ten posiłek"
+          }
+        }
+      }
+    },
+    "Add another planned meal" : {
+      "localizations": {
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dodaj kolejny zaplanowany posiłek"
+          }
+        }
+      }
+    },
+    "You can plan the same recipe more than once. Add this as a separate meal?" : {
+      "localizations": {
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Możesz zaplanować ten sam przepis więcej niż raz. Dodać go jako osobny posiłek?"
+          }
+        }
+      }
+    },
+    "Remove this planned meal?" : {
+      "localizations": {
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Usunąć zaplanowany posiłek?"
+          }
+        }
+      }
+    },
+    "This removes the meal from your plan. The recipe will not be deleted." : {
+      "localizations": {
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Posiłek zostanie usunięty z planu. Przepis pozostanie zapisany."
+          }
+        }
+      }
+    },
+    "Could not update meal plan" : {
+      "localizations": {
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nie udało się zaktualizować planu posiłków"
+          }
+        }
+      }
+    },
+    "Planning period" : {
+      "localizations": {
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Okres planowania"
+          }
+        }
+      }
+    },
+    "Date in period" : {
+      "localizations": {
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Data z wybranego okresu"
+          }
+        }
+      }
+    },
+    "Generate or refresh list" : {
+      "localizations": {
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Utwórz lub odśwież listę"
+          }
+        }
+      }
+    },
+    "Generate from meal plan" : {
+      "localizations": {
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Utwórz z planu posiłków"
+          }
+        }
+      }
+    },
+    "Generate a list for a day, week, or month, or add products yourself." : {
+      "localizations": {
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Utwórz listę na wybrany dzień, tydzień lub miesiąc albo dodaj produkty samodzielnie."
+          }
+        }
+      }
+    },
+    "Refreshing the same period keeps purchased items, your edits, removed generated ingredients, and custom products." : {
+      "localizations": {
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Odświeżenie tego samego okresu zachowuje kupione produkty, wprowadzone zmiany, usunięte składniki z przepisów i własne pozycje."
+          }
+        }
+      }
+    },
+    "Generated for" : {
+      "localizations": {
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Utworzono dla okresu"
+          }
+        }
+      }
+    },
+    "List contains custom products" : {
+      "localizations": {
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lista zawiera własne produkty"
+          }
+        }
+      }
+    },
+    "To buy" : {
+      "localizations": {
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Do kupienia"
+          }
+        }
+      }
+    },
+    "Mark as not purchased" : {
+      "localizations": {
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Oznacz jako niekupione"
+          }
+        }
+      }
+    },
+    "Mark as purchased" : {
+      "localizations": {
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Oznacz jako kupione"
+          }
+        }
+      }
+    },
+    "From: %s" : {
+      "localizations": {
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Z przepisu: %s"
+          }
+        }
+      }
+    },
+    "Custom product" : {
+      "localizations": {
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Własny produkt"
+          }
+        }
+      }
+    },
+    "Edit shopping item" : {
+      "localizations": {
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Edytuj pozycję na liście"
+          }
+        }
+      }
+    },
+    "Remove shopping item" : {
+      "localizations": {
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Usuń pozycję z listy"
+          }
+        }
+      }
+    },
+    "Remove this item?" : {
+      "localizations": {
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Usunąć tę pozycję?"
+          }
+        }
+      }
+    },
+    "This removes the custom product from your list." : {
+      "localizations": {
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Własny produkt zostanie usunięty z listy."
+          }
+        }
+      }
+    },
+    "This hides the generated ingredient and keeps it removed when you refresh this period." : {
+      "localizations": {
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Składnik z przepisu zostanie ukryty i nie pojawi się ponownie po odświeżeniu tego okresu."
+          }
+        }
+      }
+    },
+    "Add product" : {
+      "localizations": {
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dodaj produkt"
+          }
+        }
+      }
+    },
+    "Edit product" : {
+      "localizations": {
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Edytuj produkt"
+          }
+        }
+      }
+    },
+    "Product" : {
+      "localizations": {
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Produkt"
+          }
+        }
+      }
+    },
+    "Product name" : {
+      "localizations": {
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nazwa produktu"
+          }
+        }
+      }
+    },
+    "Quantity (optional)" : {
+      "localizations": {
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ilość (opcjonalnie)"
+          }
+        }
+      }
+    },
+    "Unit (optional)" : {
+      "localizations": {
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Jednostka (opcjonalnie)"
+          }
+        }
+      }
+    },
+    "Edits to recipe ingredients are kept when you refresh the same planning period." : {
+      "localizations": {
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zmiany składników z przepisów są zachowywane po odświeżeniu tego samego okresu."
+          }
+        }
+      }
+    },
+    "Check the shopping item" : {
+      "localizations": {
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sprawdź pozycję na liście"
+          }
+        }
+      }
+    },
+    "Enter a valid non-negative quantity." : {
+      "localizations": {
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wpisz prawidłową ilość nieujemną."
+          }
+        }
+      }
+    },
+    "Original recipe amount; serving count unavailable" : {
+      "localizations": {
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ilość z oryginalnego przepisu; nie podano liczby porcji"
+          }
+        }
+      }
+    },
+    "Save changes" : {
+      "localizations": {
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zapisz zmiany"
+          }
+        }
+      }
+    },
+    "Plan meal" : {
+      "localizations": {
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zaplanuj posiłek"
+          }
+        }
+      }
+    },
+    "Save meal" : {
+      "localizations": {
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zapisz posiłek"
+          }
+        }
+      }
+    },
+    "Remove" : {
+      "localizations": {
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Usuń"
+          }
+        }
+      }
+    },
+    "Add planned meal" : {
+      "localizations" : {
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dodaj zaplanowany posiłek"
+          }
+        }
+      }
+    },
+    "From: %@" : {
+      "localizations" : {
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Z przepisów: %@"
+          }
+        }
+      }
     }
   },
   "version" : "1.1"

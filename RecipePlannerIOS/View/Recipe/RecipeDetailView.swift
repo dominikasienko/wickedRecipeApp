@@ -20,6 +20,7 @@ struct RecipeDetailView: View {
     @State private var detailNutritionResult: NutritionCalculationResult?
     @State private var isCalculatingNutrition = false
     @State private var nutritionInfoMessage: LocalizedStringKey?
+    @State private var isShowingPlanSheet = false
     
     private let wickedGreen = Color(red: 0.0, green: 0.6, blue: 0.2)
     private let glindaPink = Color(red: 1.0, green: 0.75, blue: 0.8)
@@ -50,6 +51,13 @@ struct RecipeDetailView: View {
     var body: some View {
         GeometryReader { proxy in
             detailContent(proxy: proxy)
+        }
+        .sheet(isPresented: $isShowingPlanSheet) {
+            AddMealSheet(
+                selectedDate: Calendar.current.startOfDay(for: Date()),
+                availableRecipes: recipeManager.userRecipes,
+                initialRecipe: currentRecipe
+            )
         }
     }
     
@@ -134,6 +142,23 @@ struct RecipeDetailView: View {
                                 )
                             }
                         }
+
+                        Button {
+                            isShowingPlanSheet = true
+                        } label: {
+                            Label("Plan this recipe", systemImage: "calendar.badge.plus")
+                                .font(.headline)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 12)
+                                .background(Color.wickedGreen.opacity(0.16), in: RoundedRectangle(cornerRadius: 14))
+                                .overlay {
+                                    RoundedRectangle(cornerRadius: 14)
+                                        .stroke(Color.wickedGreen.opacity(0.5), lineWidth: 1)
+                                }
+                        }
+                        .buttonStyle(.plain)
+                        .foregroundStyle(Color.wickedGreen)
+                        .accessibilityIdentifier("recipe.planMeal")
                         
                         Divider().overlay(glindaPink.opacity(0.5))
 

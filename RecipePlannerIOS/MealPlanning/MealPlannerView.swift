@@ -8,19 +8,31 @@
 import SwiftUI
 import FirebaseAuth
 
+private enum MealPlannerSheetRoute: Identifiable {
+    case add(id: UUID, date: Date, mealType: String?)
+    case edit(MealPlanEntry)
+    case shoppingList
+
+    var id: String {
+        switch self {
+        case let .add(id, _, _): return "add-\(id.uuidString)"
+        case let .edit(entry): return "edit-\(entry.id ?? entry.recipeId)"
+        case .shoppingList: return "shopping-list"
+        }
+    }
+}
+
 struct MealPlannerView: View {
     @Environment(MealPlannerManager.self) private var mealPlannerManager
     @Environment(RecipeManager.self) private var recipeManager
     @Environment(ProfileManager.self) private var profileManager
     @Environment(AuthManager.self) private var authManager
     @Environment(\.locale) private var locale
-    @Environment(\.verticalSizeClass) private var verticalSizeClass
     @AppStorage("weekStartDay") private var weekStartDay: Int = 2
     
-    @State private var currentMonthDate: Date = Date().startOfMonth
     @State private var selectedDate: Date = Date().startOfDay
-    @State private var isShowingAddSheet = false
-    @State private var isShowingShoppingList = false
+    @State private var selectedViewMode: MealPlannerCalendarViewMode = .month
+    @State private var activeSheet: MealPlannerSheetRoute?
     
     var availableRecipes: [Recipe] {
         recipeManager.userRecipes
@@ -28,6 +40,10 @@ struct MealPlannerView: View {
     
     var entriesForDay: [MealPlanEntry] {
         mealPlannerManager.entriesForDay(selectedDate)
+    }
+
+    private var dateCalendar: Calendar {
+        MealPlanningCalendar.configured(locale: locale, firstWeekday: weekStartDay)
     }
 
     private var recipesById: [String: Recipe] {
@@ -55,32 +71,47 @@ struct MealPlannerView: View {
                     .ignoresSafeArea()
 
                 GeometryReader { geometry in
-                    Group {
-                        if geometry.size.width >= 720 {
-                            widePlannerLayout
-                        } else {
-                            compactPlannerLayout
+                    VStack(spacing: 12) {
+                        Picker("Calendar view", selection: $selectedViewMode) {
+                            ForEach(MealPlannerCalendarViewMode.allCases) { mode in
+                                Text(LocalizedStringKey(mode.title)).tag(mode)
+                            }
                         }
+                        .pickerStyle(.segmented)
+                        .tint(.wickedGreen)
+                        .padding(.horizontal)
+                        .accessibilityIdentifier("mealPlanner.viewMode")
+
+                        calendarContent(width: geometry.size.width)
                     }
-                    .frame(width: geometry.size.width, height: geometry.size.height)
+                    .frame(width: geometry.size.width, height: geometry.size.height, alignment: .top)
                 }
             }
             .navigationTitle("Meal Plan")
             .toolbarBackground(.visible, for: .navigationBar)
             .toolbarBackground(Color.darkBackground.opacity(0.5), for: .navigationBar)
-            .sheet(isPresented: $isShowingAddSheet) {
-                AddMealSheet(
-                    selectedDate: selectedDate,
-                    availableRecipes: availableRecipes
-                )
-            }
-            .sheet(isPresented: $isShowingShoppingList) {
-                ShoppingListView()
+            .sheet(item: $activeSheet) { route in
+                switch route {
+                case let .add(_, date, mealType):
+                    AddMealSheet(
+                        selectedDate: date,
+                        availableRecipes: availableRecipes,
+                        initialMealType: mealType
+                    )
+                case let .edit(entry):
+                    AddMealSheet(
+                        selectedDate: entry.date,
+                        availableRecipes: availableRecipes,
+                        editingEntry: entry
+                    )
+                case .shoppingList:
+                    ShoppingListView()
+                }
             }
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button {
-                        isShowingShoppingList = true
+                        activeSheet = .shoppingList
                     } label: {
                         Label("Shopping list", systemImage: "list.clipboard.fill")
                             .foregroundStyle(Color.wickedGreen)
@@ -95,12 +126,84 @@ struct MealPlannerView: View {
         }
     }
 
-    private var calendarCard: some View {
-        VStack {
-            MonthHeader(currentMonthDate: $currentMonthDate)
+    @ViewBuilder
+    private func calendarContent(width: CGFloat) -> some View {
+        switch selectedViewMode {
+        case .day:
+            ScrollView {
+                VStack(spacing: 12) {
+                    periodNavigation
+                    DailyMealsSection(
+                        selectedDate: selectedDate,
+                        entries: entriesForDay,
+                        nutritionSummary: nutritionSummary,
+                        recipesById: recipesById,
+                        onAddMeal: { showAddMeal(for: $0) },
+                        onEditMeal: { activeSheet = .edit($0) }
+                    )
+                }
+                .padding(.bottom, 20)
+                .wickedReadableWidth(820)
+            }
+        case .week:
+            weeklyContent(width: width)
+        case .month:
+            monthContent(width: width)
+        }
+    }
 
+    private var periodNavigation: some View {
+        HStack(spacing: 10) {
+            Button { moveSelection(by: -1) } label: {
+                Image(systemName: "chevron.left")
+                    .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
+            }
+            .accessibilityLabel(Text("Previous period"))
+
+            VStack(spacing: 2) {
+                Text(periodTitle)
+                    .font(.headline)
+                    .foregroundStyle(.white)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+                Button("Today") { selectedDate = dateCalendar.startOfDay(for: Date()) }
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(Color.wickedGreen)
+            }
+            .frame(maxWidth: .infinity)
+
+            Button { moveSelection(by: 1) } label: {
+                Image(systemName: "chevron.right")
+                    .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
+            }
+            .accessibilityLabel(Text("Next period"))
+        }
+        .foregroundStyle(.white)
+        .padding(.horizontal)
+    }
+
+    private var periodTitle: String {
+        switch selectedViewMode {
+        case .day:
+            return selectedDate.formatted(.dateTime.weekday(.wide).month(.wide).day().year().locale(locale))
+        case .week:
+            guard let range = MealPlanningCalendar.dateRange(for: .week, containing: selectedDate, calendar: dateCalendar) else {
+                return selectedDate.formatted(date: .abbreviated, time: .omitted)
+            }
+            let end = range.lastDay(calendar: dateCalendar)
+            return "\(range.startDate.formatted(.dateTime.month(.abbreviated).day().locale(locale))) – \(end.formatted(.dateTime.month(.abbreviated).day().year().locale(locale)))"
+        case .month:
+            return selectedDate.formatted(.dateTime.month(.wide).year().locale(locale))
+        }
+    }
+
+    private func monthContent(width: CGFloat) -> some View {
+        let calendarCard = VStack(spacing: 12) {
+            periodNavigation
             CalendarGrid(
-                currentMonthDate: currentMonthDate,
+                currentMonthDate: selectedDate.startOfMonth,
                 selectedDate: $selectedDate,
                 entries: mealPlannerManager.allMealPlanEntries,
                 firstWeekday: weekStartDay
@@ -109,72 +212,90 @@ struct MealPlannerView: View {
         .padding()
         .background(.ultraThinMaterial)
         .cornerRadius(20)
-    }
 
-    private var addMealButton: some View {
-        Button("Add Meal") { isShowingAddSheet = true }
-            .buttonStyle(.borderedProminent)
-            .tint(.wickedGreen)
-            .padding(.bottom, 10)
-    }
-
-    private var compactPlannerLayout: some View {
-        Group {
-            if verticalSizeClass == .compact {
-                ScrollView { compactPlannerContent }
-            } else {
-                compactPlannerContent
+        return ScrollView {
+            Group {
+                if width >= 720 {
+                    HStack(alignment: .top, spacing: 18) {
+                        calendarCard.frame(maxWidth: 380)
+                        dailyDetails
+                    }
+                } else {
+                    VStack(spacing: 10) {
+                        calendarCard
+                        dailyDetails
+                    }
+                }
             }
+            .padding(.horizontal)
+            .padding(.bottom, 20)
+            .wickedReadableWidth(width >= 720 ? 1_280 : 820)
         }
     }
 
-    private var compactPlannerContent: some View {
-        VStack(spacing: 0) {
-            calendarCard
+    private var dailyDetails: some View {
+        DailyMealsSection(
+            selectedDate: selectedDate,
+            entries: entriesForDay,
+            nutritionSummary: nutritionSummary,
+            recipesById: recipesById,
+            onAddMeal: { showAddMeal(for: $0) },
+            onEditMeal: { activeSheet = .edit($0) }
+        )
+    }
+
+    private func weeklyContent(width: CGFloat) -> some View {
+        guard let range = MealPlanningCalendar.dateRange(for: .week, containing: selectedDate, calendar: dateCalendar) else {
+            return AnyView(ContentUnavailableView("Calendar unavailable", systemImage: "calendar.badge.exclamationmark"))
+        }
+        let days = MealPlanningCalendar.dates(in: range, calendar: dateCalendar)
+        let entriesByDay = Dictionary(grouping: mealPlannerManager.allMealPlanEntries) {
+            dateCalendar.startOfDay(for: $0.date)
+        }
+        let columns = Array(repeating: GridItem(.flexible(), alignment: .top), count: width >= 720 ? 2 : 1)
+
+        return AnyView(VStack(spacing: 8) {
+            periodNavigation
+            ScrollView {
+                LazyVGrid(columns: columns, alignment: .center, spacing: 12) {
+                    ForEach(days, id: \.self) { day in
+                        WeeklyDayCard(
+                            date: day,
+                            calendar: dateCalendar,
+                            entries: entriesByDay[dateCalendar.startOfDay(for: day)] ?? [],
+                            recipesById: recipesById,
+                            onAddMeal: { showAddMeal(for: $0, on: day) },
+                            onEditMeal: { activeSheet = .edit($0) }
+                        )
+                    }
+                }
                 .padding(.horizontal)
-
-            DailyMealsSection(
-                selectedDate: selectedDate,
-                entries: entriesForDay,
-                nutritionSummary: nutritionSummary,
-                usesOuterScrollView: verticalSizeClass == .compact
-            )
-
-            addMealButton
-        }
-        .wickedReadableWidth(760)
+                .padding(.bottom, 20)
+                .wickedReadableWidth(width >= 720 ? 1_280 : 820)
+            }
+        })
     }
 
-    private var widePlannerLayout: some View {
-        Group {
-            if verticalSizeClass == .compact {
-                ScrollView { widePlannerContent(fillsHeight: false) }
-            } else {
-                widePlannerContent(fillsHeight: true)
-            }
-        }
+    private func showAddMeal(for mealType: String? = nil, on date: Date? = nil) {
+        let targetDate = date ?? selectedDate
+        selectedDate = targetDate
+        activeSheet = .add(id: UUID(), date: targetDate, mealType: mealType)
     }
 
-    private func widePlannerContent(fillsHeight: Bool) -> some View {
-        HStack(alignment: .top, spacing: 18) {
-            calendarCard
-                .frame(maxWidth: 360)
-
-            VStack(spacing: 0) {
-                DailyMealsSection(
-                    selectedDate: selectedDate,
-                    entries: entriesForDay,
-                    nutritionSummary: nutritionSummary,
-                    usesOuterScrollView: verticalSizeClass == .compact
-                )
-                .frame(maxHeight: fillsHeight ? .infinity : nil)
-
-                addMealButton
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+    private func moveSelection(by amount: Int) {
+        let component: Calendar.Component
+        switch selectedViewMode {
+        case .day: component = .day
+        case .week: component = .weekOfYear
+        case .month: component = .month
         }
-        .padding(.horizontal)
-        .wickedReadableWidth(1_280)
+
+        if selectedViewMode == .month,
+           let updated = MealPlanningCalendar.monthDate(byAdding: amount, to: selectedDate, calendar: dateCalendar) {
+            selectedDate = updated
+        } else if let updated = dateCalendar.date(byAdding: component, value: amount, to: selectedDate) {
+            selectedDate = dateCalendar.startOfDay(for: updated)
+        }
     }
 }
 
@@ -322,40 +443,73 @@ private struct DailyMealsSection: View {
     let selectedDate: Date
     let entries: [MealPlanEntry]
     let nutritionSummary: DailyNutritionSummaryModel
-    let usesOuterScrollView: Bool
+    let recipesById: [String: Recipe]
+    let onAddMeal: (String?) -> Void
+    let onEditMeal: (MealPlanEntry) -> Void
     
     var body: some View {
-        VStack(alignment: .leading) {
-            Text("Meals for \(selectedDate, style: .date)")
-                .font(.title2).bold()
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal)
-                .padding(.top, 20)
-            
-            if usesOuterScrollView {
-                mealRows
-            } else {
-                ScrollView { mealRows }
-            }
-        }
-        .frame(maxHeight: usesOuterScrollView ? nil : .infinity)
-    }
-
-    private var mealRows: some View {
         VStack(spacing: 12) {
+            HStack {
+                Text("Meals for \(selectedDate, style: .date)")
+                    .font(.title2.bold())
+                    .foregroundStyle(.white)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                Button {
+                    onAddMeal(nil)
+                } label: {
+                    Label("Add meal", systemImage: "plus.circle.fill")
+                        .font(.subheadline.weight(.semibold))
+                }
+                .buttonStyle(.borderless)
+                .foregroundStyle(Color.wickedGreen)
+            }
+            .padding(.top, 8)
+
             if entries.isEmpty {
                 ContentUnavailableView {
                     Label("No meals planned", systemImage: "calendar.badge.exclamationmark")
                 } description: {
-                    Text("Tap 'Add Meal' to schedule a recipe for this day.")
+                    Text("Choose a meal category below to plan a recipe for this day.")
                 }
                 .foregroundStyle(.gray)
                 .frame(maxWidth: .infinity)
-                .padding(.top, 20)
-            } else {
-                ForEach(entries) { entry in
-                    MealCard(entry: entry)
+                .padding(.vertical, 8)
+            }
+
+            ForEach(AppOptionCatalog.mealTypes) { meal in
+                let categoryEntries = entries.filter { $0.canonicalMealType == meal.id }
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack {
+                        Text(meal.title)
+                            .font(.headline)
+                            .foregroundStyle(Color.glindaPink)
+                        Spacer()
+                        Button {
+                            onAddMeal(meal.id)
+                        } label: {
+                            Label("Add", systemImage: "plus")
+                                .font(.caption.weight(.semibold))
+                        }
+                        .buttonStyle(.borderless)
+                        .foregroundStyle(Color.wickedGreen)
+                        .accessibilityLabel(Text("Add planned meal"))
+                    }
+
+                    if categoryEntries.isEmpty {
+                        Text("No recipe planned")
+                            .font(.caption)
+                            .foregroundStyle(.white.opacity(0.45))
+                            .padding(.vertical, 3)
+                    } else {
+                        ForEach(categoryEntries) { entry in
+                            MealCard(entry: entry, recipe: recipesById[entry.recipeId]) {
+                                onEditMeal(entry)
+                            }
+                        }
+                    }
                 }
+                .padding(12)
+                .background(Color.white.opacity(0.035), in: RoundedRectangle(cornerRadius: 15))
             }
 
             DailyNutritionSummaryCard(summary: nutritionSummary)
@@ -363,6 +517,80 @@ private struct DailyMealsSection: View {
         .padding(.horizontal)
         .padding(.top, 10)
         .padding(.bottom, 20)
+    }
+}
+
+private struct WeeklyDayCard: View {
+    let date: Date
+    let calendar: Calendar
+    let entries: [MealPlanEntry]
+    let recipesById: [String: Recipe]
+    let onAddMeal: (String?) -> Void
+    let onEditMeal: (MealPlanEntry) -> Void
+
+    private var isToday: Bool { calendar.isDateInToday(date) }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(date.formatted(.dateTime.weekday(.wide).locale(calendar.locale ?? .current)))
+                        .font(.headline)
+                        .foregroundStyle(isToday ? Color.wickedGreen : .white)
+                    Text(date, format: .dateTime.month(.abbreviated).day())
+                        .font(.caption)
+                        .foregroundStyle(.white.opacity(0.65))
+                }
+                Spacer()
+                if isToday {
+                    Text("Today")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(Color.darkBackground)
+                        .padding(.horizontal, 9)
+                        .padding(.vertical, 5)
+                        .background(Color.wickedGreen, in: Capsule())
+                }
+                Button {
+                    onAddMeal(nil)
+                } label: {
+                    Image(systemName: "plus.circle.fill")
+                        .font(.title3)
+                        .foregroundStyle(Color.wickedGreen)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(Text("Add meal"))
+            }
+
+            if entries.isEmpty {
+                Text("No meals planned")
+                    .font(.caption)
+                    .foregroundStyle(.white.opacity(0.55))
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.vertical, 8)
+            } else {
+                ForEach(AppOptionCatalog.mealTypes) { meal in
+                    let mealEntries = entries.filter { $0.canonicalMealType == meal.id }
+                    if !mealEntries.isEmpty {
+                        VStack(alignment: .leading, spacing: 7) {
+                            Text(meal.title)
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(Color.glindaPink)
+                            ForEach(mealEntries) { entry in
+                                MealCard(entry: entry, recipe: recipesById[entry.recipeId]) {
+                                    onEditMeal(entry)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        .padding(14)
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .stroke(isToday ? Color.wickedGreen.opacity(0.65) : Color.white.opacity(0.12), lineWidth: 1)
+        }
     }
 }
 
@@ -698,45 +926,112 @@ private func formatNutritionValue(_ value: Double, locale: Locale) -> String {
 struct MealCard: View {
     @Environment(MealPlannerManager.self) private var mealPlannerManager
     let entry: MealPlanEntry
+    let recipe: Recipe?
+    let onEdit: () -> Void
+
+    @State private var showingDeleteConfirmation = false
+    @State private var errorMessage: String?
     
     var body: some View {
-        HStack {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(entry.localizedMealType)
-                    .font(.caption.bold())
-                    .foregroundStyle(Color.glindaPink)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.8)
-                
-                Text(entry.recipeName)
-                    .font(.headline)
-                    .foregroundStyle(.white)
-                    .lineLimit(2)
-                    .minimumScaleFactor(0.85)
+        HStack(spacing: 8) {
+            if let recipe {
+                NavigationLink {
+                    RecipeDetailView(recipe: recipe)
+                } label: {
+                    recipeLabel
+                }
+                .buttonStyle(.plain)
+            } else {
+                recipeLabel
             }
-            
-            Spacer()
-            
-            Text("\(entry.plannedServings) serv.")
-                .font(.callout)
-                .foregroundStyle(.gray)
-                .padding(.trailing, 10)
-            
-            Button(role: .destructive) {
-                Task { try? await mealPlannerManager.deleteMealPlanEntry(entryId: entry.id ?? "") }
-            } label: {
-                Image(systemName: "trash.fill")
-                    .foregroundStyle(.red.opacity(0.8))
+
+            Spacer(minLength: 4)
+
+            Text("\(entry.plannedServings) ×")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.white.opacity(0.7))
+                .fixedSize()
+
+            Button(action: onEdit) {
+                Image(systemName: "pencil")
+                    .foregroundStyle(Color.wickedGreen)
+                    .frame(width: 36, height: 40)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .accessibilityLabel(Text("Edit planned meal"))
+
+            Button(role: .destructive) {
+                showingDeleteConfirmation = true
+            } label: {
+                Image(systemName: "trash")
+                    .foregroundStyle(.red.opacity(0.85))
+                    .frame(width: 36, height: 40)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(Text("Remove planned meal"))
         }
-        .padding()
-        .background(.ultraThinMaterial)
-        .cornerRadius(15)
-        .overlay(
-            RoundedRectangle(cornerRadius: 15)
-                .stroke(Color.white.opacity(0.2), lineWidth: 1)
-        )
+        .padding(.horizontal, 10)
+        .padding(.vertical, 7)
+        .background(Color.white.opacity(0.055), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .alert(AppLocalization.key("Remove this planned meal?"), isPresented: $showingDeleteConfirmation) {
+            Button(AppLocalization.key("Remove"), role: .destructive) {
+                Task { await deleteEntry() }
+            }
+            Button(AppLocalization.key("Cancel"), role: .cancel) { }
+        } message: {
+            Text(AppLocalization.key("This removes the meal from your plan. The recipe will not be deleted."))
+        }
+        .alert(AppLocalization.key("Could not update meal plan"), isPresented: Binding(
+            get: { errorMessage != nil },
+            set: { if !$0 { errorMessage = nil } }
+        )) {
+            Button(AppLocalization.key("OK"), role: .cancel) { errorMessage = nil }
+        } message: {
+            Text(errorMessage ?? "")
+        }
+    }
+
+    private var recipeLabel: some View {
+        HStack(spacing: 9) {
+            if let imageURL = recipe?.imageURL, !imageURL.isEmpty {
+                AsyncImageView(urlString: imageURL)
+                    .frame(width: 42, height: 42)
+                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+            } else {
+                Image(systemName: "fork.knife")
+                    .frame(width: 42, height: 42)
+                    .foregroundStyle(Color.wickedGreen)
+                    .background(Color.wickedGreen.opacity(0.12), in: RoundedRectangle(cornerRadius: 8))
+            }
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(entry.localizedMealType)
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(Color.glindaPink)
+                    .lineLimit(1)
+                Text(entry.recipeName)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.white)
+                    .lineLimit(2)
+                    .multilineTextAlignment(.leading)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .contentShape(Rectangle())
+    }
+
+    private func deleteEntry() async {
+        guard let entryID = entry.id else {
+            errorMessage = MealPlanMutationError.missingEntryIdentifier.localizedDescription
+            return
+        }
+        do {
+            try await mealPlannerManager.deleteMealPlanEntry(entryId: entryID)
+        } catch {
+            errorMessage = error.localizedDescription
+        }
     }
 }
 
@@ -773,16 +1068,37 @@ struct AddMealSheet: View {
     @Environment(AuthManager.self) private var authManager
     @AppStorage("defaultMealType") private var defaultMealType: String = "breakfast"
     
-    let selectedDate: Date
     let availableRecipes: [Recipe]
+    let initialMealType: String?
+    let editingEntry: MealPlanEntry?
     
     @State private var selectedRecipe: Recipe?
-    @State private var selectedMealType: String = "breakfast"
+    @State private var plannedDate: Date
+    @State private var selectedMealType: String
     @State private var recipeSearchText: String = ""
     @State private var activeRecipeFilter: MealRecipeFilter = .all
     @State private var errorMessage: LocalizedStringKey?
-    
-    @State private var plannedServings: Int = 1
+    @State private var isSaving = false
+    @State private var showingDuplicateConfirmation = false
+    @State private var plannedServings: Int
+
+    init(
+        selectedDate: Date,
+        availableRecipes: [Recipe],
+        initialMealType: String? = nil,
+        editingEntry: MealPlanEntry? = nil,
+        initialRecipe: Recipe? = nil
+    ) {
+        self.availableRecipes = availableRecipes
+        self.initialMealType = initialMealType
+        self.editingEntry = editingEntry
+        _plannedDate = State(initialValue: editingEntry?.date ?? selectedDate)
+        _selectedMealType = State(initialValue: editingEntry?.mealType ?? initialMealType ?? "breakfast")
+        _plannedServings = State(initialValue: editingEntry?.plannedServings ?? 1)
+        _selectedRecipe = State(initialValue: initialRecipe ?? editingEntry.flatMap { entry in
+            availableRecipes.first(where: { $0.id == entry.recipeId })
+        })
+    }
 
     private var trimmedSearchText: String {
         recipeSearchText.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -868,7 +1184,7 @@ struct AddMealSheet: View {
                 .ignoresSafeArea()
 
             VStack {
-                Text("Add Meal")
+                Text(editingEntry == nil ? "Plan a meal" : "Edit planned meal")
                     .font(.title2).bold()
                     .foregroundStyle(.white)
                     .padding(.top, 20)
@@ -876,14 +1192,9 @@ struct AddMealSheet: View {
                 ScrollView {
                     VStack(spacing: 20) {
                         VStack(spacing: 15) {
-                            HStack {
-                                Text("Date")
-                                    .foregroundStyle(.gray)
-                                Spacer()
-                                Text(selectedDate, style: .date)
-                                    .font(.headline)
-                                    .foregroundStyle(Color.wickedGreen)
-                            }
+                            DatePicker("Date", selection: $plannedDate, displayedComponents: .date)
+                                .datePickerStyle(.compact)
+                                .tint(.wickedGreen)
                             
                             Picker("Meal type", selection: $selectedMealType) {
                                 ForEach(AppOptionCatalog.mealTypes) { meal in
@@ -1043,11 +1354,11 @@ struct AddMealSheet: View {
                                     }
 
                                     Stepper(value: $plannedServings, in: 1...20) {
-                                        Text("Servings eaten: **\(plannedServings)**")
+                                        Text("Planned servings: **\(plannedServings)**")
                                             .foregroundStyle(.white)
                                     }
                                     
-                                    Text("This recipe makes \(selectedRecipe.servings) servings in total. Choose how many servings were eaten for this meal.")
+                                    Text("This recipe makes \(selectedRecipe.servings) servings. Choose the number planned for this meal.")
                                         .font(.caption)
                                         .foregroundStyle(.gray)
                                 }
@@ -1058,6 +1369,10 @@ struct AddMealSheet: View {
                                     RoundedRectangle(cornerRadius: 14, style: .continuous)
                                         .stroke(Color.wickedGreen.opacity(0.35), lineWidth: 1)
                                 )
+                            } else if editingEntry != nil {
+                                Text("The original recipe is no longer available. You can update this meal or choose a replacement recipe.")
+                                    .font(.caption)
+                                    .foregroundStyle(.gray)
                             } else {
                                 Text("Tap a recipe card to select it.")
                                     .font(.caption)
@@ -1079,24 +1394,20 @@ struct AddMealSheet: View {
                 
                 Spacer()
                 
-                Button("Save Meal") { saveMeal() }
+                Button(editingEntry == nil ? "Plan meal" : "Save changes") { saveMeal() }
                     .font(.headline)
                     .frame(maxWidth: .infinity)
                     .buttonStyle(.borderedProminent)
                     .tint(.wickedGreen)
-                    .disabled(selectedRecipe == nil)
+                    .disabled((selectedRecipe == nil && editingEntry == nil) || isSaving)
                     .padding()
             }
             .wickedReadableWidth(760)
         }
         .onAppear {
-            let normalized = AppOptionCatalog.canonicalValue(
-                for: defaultMealType,
-                in: AppOptionCatalog.mealTypes
-            )
-            selectedMealType = AppOptionCatalog.contains(normalized, in: AppOptionCatalog.mealTypes)
-                ? normalized
-                : "breakfast"
+            let candidate = editingEntry?.mealType ?? initialMealType ?? defaultMealType
+            let normalized = AppOptionCatalog.canonicalValue(for: candidate.isEmpty ? defaultMealType : candidate, in: AppOptionCatalog.mealTypes)
+            selectedMealType = AppOptionCatalog.contains(normalized, in: AppOptionCatalog.mealTypes) ? normalized : "breakfast"
         }
         .toolbar {
             ToolbarItem(placement: .cancellationAction) {
@@ -1104,32 +1415,68 @@ struct AddMealSheet: View {
                     .foregroundStyle(.white)
             }
         }
+        .alert(AppLocalization.key("This recipe is already planned for this meal"), isPresented: $showingDuplicateConfirmation) {
+            Button(AppLocalization.key("Add another planned meal"), role: .destructive) {
+                Task { await persistMeal() }
+            }
+            Button(AppLocalization.key("Cancel"), role: .cancel) { }
+        } message: {
+            Text(AppLocalization.key("You can plan the same recipe more than once. Add this as a separate meal?"))
+        }
     }
     
     private func saveMeal() {
-        guard let recipe = selectedRecipe, let userId = authManager.user?.uid else {
-            errorMessage = AppLocalization.key("An unknown error occurred.")
+        guard (selectedRecipe?.id != nil || editingEntry != nil), authManager.user?.uid != nil else {
+            errorMessage = AppLocalization.key("Choose a saved recipe and make sure you are signed in.")
             return
         }
-        
-        let newEntry = MealPlanEntry(
-            userId: userId,
-            date: selectedDate,
-            mealType: selectedMealType,
-            recipeId: recipe.id ?? "",
-            recipeName: recipe.name,
-            plannedServings: plannedServings
-        )
-        
-        Task {
-            do {
-                try await mealPlannerManager.addMealPlanEntry(entry: newEntry)
-                await MainActor.run { dismiss() }
-            } catch {
-                await MainActor.run {
-                    errorMessage = AppLocalization.key("An unknown error occurred.")
-                }
+
+        if editingEntry == nil, let recipe = selectedRecipe,
+           mealPlannerManager.allMealPlanEntries.contains(where: { existing in
+               existing.recipeId == recipe.id
+                   && existing.canonicalMealType == selectedMealType
+                   && Calendar.current.isDate(existing.date, inSameDayAs: plannedDate)
+           }) {
+            showingDuplicateConfirmation = true
+            return
+        }
+
+        Task { await persistMeal() }
+    }
+
+    @MainActor
+    private func persistMeal() async {
+        guard let userID = authManager.user?.uid,
+              let recipeID = selectedRecipe?.id ?? editingEntry?.recipeId,
+              let recipeName = selectedRecipe?.name ?? editingEntry?.recipeName else {
+            errorMessage = AppLocalization.key("Choose a saved recipe and make sure you are signed in.")
+            return
+        }
+        isSaving = true
+        defer { isSaving = false }
+
+        do {
+            if var entry = editingEntry {
+                entry.date = Calendar.current.startOfDay(for: plannedDate)
+                entry.mealType = selectedMealType
+                entry.recipeId = recipeID
+                entry.recipeName = recipeName
+                entry.plannedServings = plannedServings
+                try await mealPlannerManager.updateMealPlanEntry(entry: entry)
+            } else {
+                let entry = MealPlanEntry(
+                    userId: userID,
+                    date: plannedDate,
+                    mealType: selectedMealType,
+                    recipeId: recipeID,
+                    recipeName: recipeName,
+                    plannedServings: plannedServings
+                )
+                try await mealPlannerManager.addMealPlanEntry(entry: entry)
             }
+            dismiss()
+        } catch {
+            errorMessage = AppLocalization.key("The meal plan could not be saved. Check your connection and try again.")
         }
     }
 

@@ -10,6 +10,22 @@ import FirebaseFirestore
 import FirebaseAuth
 import Observation
 
+enum MealPlanMutationError: LocalizedError {
+    case unauthenticated
+    case invalidEntry
+    case ownershipMismatch
+    case missingEntryIdentifier
+
+    var errorDescription: String? {
+        switch self {
+        case .unauthenticated: "You must be signed in to change the meal plan."
+        case .invalidEntry: "The planned meal contains invalid information."
+        case .ownershipMismatch: "You can only change meals in your own plan."
+        case .missingEntryIdentifier: "The planned meal could not be identified."
+        }
+    }
+}
+
 @Observable
 class MealPlannerManager {
     private let db = Firestore.firestore()
@@ -73,14 +89,57 @@ class MealPlannerManager {
     
     /// Dodaje nowy wpis do planu posiłków.
     func addMealPlanEntry(entry: MealPlanEntry) async throws {
+        try Self.validate(entry: entry, authenticatedUserID: Auth.auth().currentUser?.uid)
+        guard entry.userId == userId else { throw MealPlanMutationError.ownershipMismatch }
+
         let collectionRef = db.collection("users").document(userId)
             .collection("mealPlan")
-        
-        try collectionRef.addDocument(from: entry)
+        let document = collectionRef.document()
+        let data = try Firestore.Encoder().encode(entry)
+        try await document.setData(data)
+    }
+
+    /// Updates the existing Firestore document so each planned meal keeps its own stable ID.
+    func updateMealPlanEntry(entry: MealPlanEntry) async throws {
+        try Self.validate(entry: entry, authenticatedUserID: Auth.auth().currentUser?.uid)
+        guard entry.userId == userId else { throw MealPlanMutationError.ownershipMismatch }
+        guard let entryID = entry.id, !entryID.isEmpty, !entryID.contains("/") else {
+            throw MealPlanMutationError.missingEntryIdentifier
+        }
+
+        let data = try Firestore.Encoder().encode(entry)
+        try await db.collection("users").document(userId)
+            .collection("mealPlan").document(entryID)
+            .setData(data, merge: false)
+    }
+
+    static func validate(entry: MealPlanEntry, authenticatedUserID: String?) throws {
+        guard let authenticatedUserID, !authenticatedUserID.isEmpty else {
+            throw MealPlanMutationError.unauthenticated
+        }
+        guard authenticatedUserID == entry.userId else {
+            throw MealPlanMutationError.ownershipMismatch
+        }
+        guard !entry.recipeId.isEmpty,
+              !entry.recipeName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              (1...20).contains(entry.plannedServings),
+              AppOptionCatalog.contains(entry.canonicalMealType, in: AppOptionCatalog.mealTypes),
+              entry.date.timeIntervalSince1970.isFinite else {
+            throw MealPlanMutationError.invalidEntry
+        }
     }
     
     /// Usuwa wpis z planu posiłków na podstawie ID.
     func deleteMealPlanEntry(entryId: String) async throws {
+        guard Auth.auth().currentUser?.uid == userId else {
+            throw Auth.auth().currentUser == nil
+                ? MealPlanMutationError.unauthenticated
+                : MealPlanMutationError.ownershipMismatch
+        }
+        guard !entryId.isEmpty, !entryId.contains("/") else {
+            throw MealPlanMutationError.missingEntryIdentifier
+        }
+
         try await db.collection("users").document(userId)
             .collection("mealPlan")
             .document(entryId)
@@ -111,6 +170,10 @@ class MealPlannerManager {
     /// Pomocnicza funkcja do filtrowania posiłków na dany dzień
     func entriesForDay(_ date: Date) -> [MealPlanEntry] {
         return allMealPlanEntries.filter { $0.date.isSameDay(as: date) }
+    }
+
+    func entries(in range: MealPlanningDateRange, calendar: Calendar = .current) -> [MealPlanEntry] {
+        MealPlanningCalendar.entries(allMealPlanEntries, in: range, calendar: calendar)
     }
     
     func stopListening() {

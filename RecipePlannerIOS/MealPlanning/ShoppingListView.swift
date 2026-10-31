@@ -1,132 +1,143 @@
-//
-//  ShoppingListView.swift
-//
-
 import SwiftUI
 
-// MARK: - Widok główny
-
 struct ShoppingListView: View {
-    @Environment(\.dismiss) var dismiss
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.locale) private var locale
     @Environment(MealPlannerManager.self) private var mealPlannerManager
     @Environment(RecipeManager.self) private var recipeManager
     @Environment(ShoppingListManager.self) private var shoppingListManager
-    @AppStorage("shoppingIncludeManualItems") private var shoppingIncludeManualItems: Bool = true
-    @AppStorage("shoppingPreserveCompletedState") private var shoppingPreserveCompletedState: Bool = true
-    
-    @State private var startDate: Date = Date().startOfDay
-    @State private var endDate: Date = Calendar.current.date(byAdding: .day, value: 7, to: Date().startOfDay) ?? Date()
-    
-    @State private var isGeneratorExpanded: Bool = true
-    @State private var isShowingManualAddSheet: Bool = false
-    
-    private var itemsToBuy: [ShoppingListItem] {
-        shoppingListManager.shoppingList.filter { !$0.isCompleted }.sorted(by: { $0.name < $1.name })
+    @AppStorage("weekStartDay") private var weekStartDay: Int = 2
+
+    @State private var selectedPeriod: ShoppingListPeriod = .week
+    @State private var periodAnchor = Calendar.current.startOfDay(for: Date())
+    @State private var isGeneratorExpanded = true
+    @State private var isShowingAddSheet = false
+    @State private var editingItem: ShoppingListItem?
+
+    private var dateCalendar: Calendar {
+        MealPlanningCalendar.configured(locale: locale, firstWeekday: weekStartDay)
     }
-    private var itemsPurchased: [ShoppingListItem] {
-        shoppingListManager.shoppingList.filter { $0.isCompleted }.sorted(by: { $0.name < $1.name })
+
+    private var selectedRange: MealPlanningDateRange? {
+        MealPlanningCalendar.dateRange(for: selectedPeriod, containing: periodAnchor, calendar: dateCalendar)
     }
+
+    private var visibleItems: [ShoppingListItem] {
+        shoppingListManager.shoppingList
+            .filter { !$0.isExcludedFromGeneration }
+            .sorted {
+                if $0.isCompleted != $1.isCompleted { return !$0.isCompleted }
+                return $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending
+            }
+    }
+
+    private var itemsToBuy: [ShoppingListItem] { visibleItems.filter { !$0.isCompleted } }
+    private var itemsPurchased: [ShoppingListItem] { visibleItems.filter(\.isCompleted) }
 
     var body: some View {
         NavigationStack {
             ZStack(alignment: .bottomTrailing) {
                 Color.darkBackground.ignoresSafeArea()
-                
                 WickedAmbientGlowLayer(pinkOpacity: 0.3, greenOpacity: 0.3, greenDiameter: 200)
                     .ignoresSafeArea()
 
                 ScrollView {
-                    VStack(spacing: 20) {
-                        
+                    VStack(spacing: 18) {
                         PlanningPeriodDisplay(manager: shoppingListManager)
-                            .padding(.horizontal)
 
                         DisclosureGroup(isExpanded: $isGeneratorExpanded) {
-                            VStack(spacing: 15) {
-                                DatePicker("Start date", selection: $startDate, displayedComponents: .date)
-                                DatePicker("End date", selection: $endDate, displayedComponents: .date)
-                                    .onChange(of: endDate) {
-                                        if endDate < startDate {
-                                            startDate = endDate
-                                        }
+                            VStack(alignment: .leading, spacing: 14) {
+                                Picker("Planning period", selection: $selectedPeriod) {
+                                    ForEach(ShoppingListPeriod.allCases) { period in
+                                        Text(LocalizedStringKey(period.title)).tag(period)
                                     }
-                                    .onChange(of: startDate) {
-                                        if startDate > endDate {
-                                            endDate = startDate
-                                        }
-                                    }
-                                
-                                Button(action: generateShoppingList) {
+                                }
+                                .pickerStyle(.segmented)
+
+                                DatePicker("Date in period", selection: $periodAnchor, displayedComponents: .date)
+                                    .datePickerStyle(.compact)
+                                    .tint(.wickedGreen)
+
+                                if let selectedRange {
                                     HStack {
-                                        Spacer()
-                                        Image(systemName: "arrow.down.doc.fill")
-                                        Text("Generate Shopping List")
-                                        Spacer()
+                                        Text(selectedRange.startDate, format: .dateTime.month(.abbreviated).day().year())
+                                        Text(verbatim: "–")
+                                        Text(selectedRange.lastDay(calendar: dateCalendar), format: .dateTime.month(.abbreviated).day().year())
                                     }
+                                    .font(.caption)
+                                    .foregroundStyle(.white.opacity(0.65))
+                                }
+
+                                Button(action: generateShoppingList) {
+                                    Label("Generate or refresh list", systemImage: "arrow.triangle.2.circlepath")
+                                        .frame(maxWidth: .infinity)
                                 }
                                 .buttonStyle(.borderedProminent)
                                 .tint(.wickedGreen)
-                                .padding(.top, 5)
+                                .disabled(selectedRange == nil)
+                                .accessibilityIdentifier("shoppingList.generate")
                             }
-                            .padding()
-                            .tint(.glindaPink)
-                            
+                            .padding(.top, 12)
                         } label: {
-                            Text("Generate from Meal Plan")
-                                .font(.headline).bold()
+                            Label("Generate from meal plan", systemImage: "calendar.badge.plus")
+                                .font(.headline)
+                                .foregroundStyle(.white)
                         }
-                        .padding()
-                        .background(.ultraThinMaterial)
-                        .cornerRadius(20)
-                        .padding(.horizontal)
-                        
+                        .padding(16)
+                        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
 
-                        if shoppingListManager.shoppingList.isEmpty {
+                        if visibleItems.isEmpty {
                             ContentUnavailableView(
                                 "List is empty",
                                 systemImage: "list.clipboard",
-                                description: Text("Generate a list from your meal plan or tap the '+' button to add items manually.")
+                                description: Text("Generate a list for a day, week, or month, or add products yourself.")
                             )
                             .foregroundStyle(.gray)
-                            .padding(.top, 50)
+                            .padding(.top, 24)
                         } else {
-                            if !itemsToBuy.isEmpty {
-                                ShoppingListSection(
-                                    title: "To Buy",
-                                    items: itemsToBuy,
-                                    onToggle: shoppingListManager.toggleCompletion,
-                                    onDelete: shoppingListManager.deleteItem
-                                )
-                            }
-                            if !itemsPurchased.isEmpty {
-                                ShoppingListSection(
-                                    title: "Purchased",
-                                    items: itemsPurchased,
-                                    onToggle: shoppingListManager.toggleCompletion,
-                                    onDelete: shoppingListManager.deleteItem
-                                )
-                            }
+                            ShoppingListSection(
+                                title: "To buy",
+                                items: itemsToBuy,
+                                onToggle: shoppingListManager.toggleCompletion,
+                                onEdit: { editingItem = $0 },
+                                onDelete: shoppingListManager.deleteItem
+                            )
+                            ShoppingListSection(
+                                title: "Purchased",
+                                items: itemsPurchased,
+                                onToggle: shoppingListManager.toggleCompletion,
+                                onEdit: { editingItem = $0 },
+                                onDelete: shoppingListManager.deleteItem
+                            )
                         }
-                        
-                        Spacer(minLength: 80)
+
+                        Text("Refreshing the same period keeps purchased items, your edits, removed generated ingredients, and custom products.")
+                            .font(.caption)
+                            .foregroundStyle(.white.opacity(0.55))
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.horizontal, 4)
+                            .padding(.bottom, 90)
                     }
-                    .wickedReadableWidth(900)
+                    .padding(.horizontal)
+                    .padding(.top, 12)
+                    .wickedReadableWidth(920)
                 }
-                
+
                 Button {
-                    isShowingManualAddSheet = true
+                    isShowingAddSheet = true
                 } label: {
-                    Image(systemName: "plus")
-                        .font(.title.weight(.semibold))
-                        .frame(width: 60, height: 60)
-                        .background(Color.glindaPink)
-                        .foregroundColor(.black)
-                        .clipShape(Circle())
+                    Label("Add product", systemImage: "plus")
+                        .font(.headline)
+                        .padding(.horizontal, 18)
+                        .frame(height: 54)
+                        .background(Color.glindaPink, in: Capsule())
+                        .foregroundStyle(.black)
                         .shadow(radius: 10)
                 }
                 .padding()
+                .accessibilityIdentifier("shoppingList.addItem")
             }
-            .navigationTitle("Shopping List")
+            .navigationTitle("Shopping list")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -134,164 +145,75 @@ struct ShoppingListView: View {
                         .foregroundStyle(.white)
                 }
             }
-            .sheet(isPresented: $isShowingManualAddSheet) {
-                ManualAddItemSheet { name in
-                    addManualItem(name: name)
+            .sheet(isPresented: $isShowingAddSheet) {
+                ShoppingListItemEditorSheet(item: nil) { item in
+                    shoppingListManager.addItem(item)
                 }
-                .presentationDetents([.height(200)])
+            }
+            .sheet(item: $editingItem) { item in
+                ShoppingListItemEditorSheet(item: item) { updated in
+                    shoppingListManager.updateItem(updated)
+                }
             }
             .onAppear {
-                if endDate < startDate {
-                    endDate = startDate
+                if let start = shoppingListManager.currentStartDate {
+                    periodAnchor = start
+                    if let end = shoppingListManager.currentEndDate {
+                        let length = dateCalendar.dateComponents([.day], from: start, to: end).day
+                        if length == 0 {
+                            selectedPeriod = .day
+                        } else if length == 6 {
+                            selectedPeriod = .week
+                        } else if dateCalendar.isDate(start, equalTo: end, toGranularity: .month),
+                                  dateCalendar.component(.day, from: start) == 1 {
+                            selectedPeriod = .month
+                        }
+                    }
                 }
             }
         }
     }
-    
-// MARK: - Logika
-    
-    func generateShoppingList() {
-        let currentList = shoppingListManager.shoppingList
-        
-        var completionMap: [String: Bool] = [:]
-        if shoppingPreserveCompletedState {
-            for item in currentList {
-                let key = ShoppingListManager.normalizedIngredientKey(for: item.name)
-                guard !key.isEmpty else { continue }
-                completionMap[key] = (completionMap[key] ?? false) || item.isCompleted
-            }
-        }
-        
-        let manualItems = shoppingIncludeManualItems ? currentList.filter { $0.isManuallyAdded } : []
-        
-        let filteredEntries = mealPlannerManager.allMealPlanEntries.filter { entry in
-            return entry.date.startOfDay >= startDate && entry.date.startOfDay <= endDate
-        }
-        
-        guard !filteredEntries.isEmpty else {
-            shoppingListManager.setList(manualItems, from: nil, to: nil)
-            isGeneratorExpanded = false
-            UIApplication.shared.endEditing()
-            return
-        }
-        
-        let allRecipes = recipeManager.userRecipes
-        var generatedItems = ShoppingListManager.generateList(from: filteredEntries, allRecipes: allRecipes)
-        
-        if shoppingPreserveCompletedState {
-            generatedItems = generatedItems.map { item in
-                var updatedItem = item
-                let key = ShoppingListManager.normalizedIngredientKey(for: item.name)
-                if let isCompleted = completionMap[key] {
-                    updatedItem.isCompleted = isCompleted
-                }
-                return updatedItem
-            }
-        }
-        
-        let combinedItems = generatedItems + manualItems
-        let finalAggregatedList = aggregate(items: combinedItems)
-        
-        shoppingListManager.setList(finalAggregatedList, from: startDate, to: endDate)
-        
+
+    private func generateShoppingList() {
+        guard let selectedRange else { return }
+        shoppingListManager.regenerate(
+            from: mealPlannerManager.allMealPlanEntries,
+            recipes: recipeManager.userRecipes,
+            within: selectedRange,
+            calendar: dateCalendar
+        )
         isGeneratorExpanded = false
         UIApplication.shared.endEditing()
     }
-    
-    /// AGREGACJA SKŁADNIKÓW
-    private func aggregate(items: [ShoppingListItem]) -> [ShoppingListItem] {
-        var aggregatedDict = [String: ShoppingListItem]()
-        
-        for item in items {
-            let key = ShoppingListManager.normalizedIngredientKey(for: item.name)
-            guard !key.isEmpty else { continue }
-            
-            if var existingItem = aggregatedDict[key] {
-                existingItem.isCompleted = existingItem.isCompleted || item.isCompleted
-                existingItem.isManuallyAdded = existingItem.isManuallyAdded || item.isManuallyAdded
-                
-                if let newSources = item.recipeSources {
-                    let existingSources = existingItem.recipeSources ?? []
-                    let newUniqueSources = newSources.filter { !existingSources.contains($0) }
-                    existingItem.recipeSources = existingSources + newUniqueSources
-                }
-                
-                aggregatedDict[key] = existingItem
-            } else {
-                var cleanItem = item
-                cleanItem.name = ShoppingListManager.cleanedIngredientName(item.name)
-                cleanItem.quantity = 0
-                cleanItem.unit = ""
-                aggregatedDict[key] = cleanItem
-            }
-        }
-        return Array(aggregatedDict.values)
-    }
-
-    /// Dodaje produkt wpisany ręcznie (wywołuje Menedżera)
-    func addManualItem(name: String) {
-        guard !name.isEmpty else { return }
-        
-        let newItem = ShoppingListItem(
-            name: name,
-            quantity: 0,
-            unit: "",
-            isCompleted: false,
-            isManuallyAdded: true,
-            recipeSources: nil
-        )
-        
-        let combinedList = shoppingListManager.shoppingList + [newItem]
-        let finalAggregatedList = aggregate(items: combinedList)
-        
-        shoppingListManager.setList(finalAggregatedList,
-                                    from: shoppingListManager.currentStartDate,
-                                    to: shoppingListManager.currentEndDate)
-    }
 }
-
-
-// MARK: Wyświetlanie Zakresu Dat
 
 struct PlanningPeriodDisplay: View {
     @Bindable var manager: ShoppingListManager
-    
+
     var body: some View {
         Group {
             if let start = manager.currentStartDate, let end = manager.currentEndDate {
-                HStack(spacing: 4) {
-                    Text("Generated for:")
+                HStack(spacing: 6) {
+                    Text("Generated for")
                         .font(.caption)
-                    HStack(spacing: 0) {
-                        Text(start, format: .dateTime.month(.abbreviated).day())
-                        Text(verbatim: " - ")
-                        Text(end, format: .dateTime.month(.abbreviated).day())
-                    }
-                        .font(.callout).bold()
+                    Text(start, format: .dateTime.month(.abbreviated).day().year())
+                    Text(verbatim: "–")
+                    Text(end, format: .dateTime.month(.abbreviated).day().year())
                 }
-                .foregroundStyle(.gray)
-                .padding(.vertical, 8)
-                .padding(.horizontal, 15)
-                .background(.ultraThinMaterial)
-                .cornerRadius(10)
-            } else if !manager.shoppingList.isEmpty {
-                Text("List contains manually added items.")
+                .font(.callout.bold())
+                .foregroundStyle(.white.opacity(0.75))
+                .padding(.vertical, 9)
+                .padding(.horizontal, 14)
+                .background(.ultraThinMaterial, in: Capsule())
+            } else if manager.shoppingList.contains(where: { $0.isManuallyAdded && !$0.isExcludedFromGeneration }) {
+                Text("List contains custom products")
                     .font(.caption)
-                    .foregroundStyle(.gray)
+                    .foregroundStyle(.white.opacity(0.65))
                     .padding(.vertical, 8)
-                    .padding(.horizontal, 15)
-                    .background(.ultraThinMaterial)
-                    .cornerRadius(10)
+                    .padding(.horizontal, 14)
+                    .background(.ultraThinMaterial, in: Capsule())
             }
         }
-    }
-}
-
-// MARK: - Widoki Pomocnicze 
-
-extension UIApplication {
-    func endEditing() {
-        sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
     }
 }
 
@@ -299,26 +221,27 @@ struct ShoppingListSection: View {
     let title: LocalizedStringKey
     let items: [ShoppingListItem]
     let onToggle: (ShoppingListItem) -> Void
+    let onEdit: (ShoppingListItem) -> Void
     let onDelete: (ShoppingListItem) -> Void
-    
+
     var body: some View {
         if !items.isEmpty {
-            VStack(alignment: .leading) {
+            VStack(alignment: .leading, spacing: 10) {
                 Text(title)
-                    .font(.title2).bold()
+                    .font(.title3.bold())
                     .foregroundStyle(.white)
-                    .padding(.horizontal)
-                
-                LazyVStack(spacing: 12) {
+                    .padding(.horizontal, 3)
+
+                LazyVStack(spacing: 9) {
                     ForEach(items) { item in
                         ShoppingListRow(
                             item: item,
                             onToggle: { onToggle(item) },
+                            onEdit: { onEdit(item) },
                             onDelete: { onDelete(item) }
                         )
                     }
                 }
-                .padding(.horizontal)
             }
         }
     }
@@ -327,91 +250,185 @@ struct ShoppingListSection: View {
 struct ShoppingListRow: View {
     let item: ShoppingListItem
     let onToggle: () -> Void
+    let onEdit: () -> Void
     let onDelete: () -> Void
-    
+
+    @State private var showingDeleteConfirmation = false
+
     var body: some View {
-        HStack(spacing: 15) {
+        HStack(spacing: 10) {
             Button(action: onToggle) {
                 Image(systemName: item.isCompleted ? "checkmark.circle.fill" : "circle")
                     .font(.title2)
                     .foregroundStyle(item.isCompleted ? Color.glindaPink : .gray)
+                    .frame(width: 36, height: 42)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            
-            VStack(alignment: .leading, spacing: 2) {
+            .accessibilityLabel(Text(item.isCompleted ? "Mark as not purchased" : "Mark as purchased"))
+
+            VStack(alignment: .leading, spacing: 3) {
                 Text(item.name)
                     .strikethrough(item.isCompleted, color: .gray)
                     .foregroundStyle(item.isCompleted ? .gray : .white)
                     .font(.headline)
-                
-                if let sources = item.recipeSources, !sources.isEmpty {
-                    Text("from: \(sources.joined(separator: ", "))")
-                        .font(.caption)
-                        .foregroundStyle(.gray)
-                        .strikethrough(item.isCompleted, color: .gray)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                if let amount = item.amountDescription {
+                    Text(amount)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.white.opacity(0.75))
                 }
-                else if item.isManuallyAdded {
-                    Text("Manually added")
+                if let note = item.quantityNote, !note.isEmpty {
+                    Text(LocalizedStringKey(note))
+                        .font(.caption)
+                        .foregroundStyle(.orange.opacity(0.85))
+                }
+                if let sources = item.recipeSources, !sources.isEmpty {
+                    Text("From: \(sources.joined(separator: ", "))")
                         .font(.caption)
                         .foregroundStyle(.gray)
-                        .strikethrough(item.isCompleted, color: .gray)
+                        .lineLimit(2)
+                } else if item.isManuallyAdded {
+                    Text("Custom product")
+                        .font(.caption)
+                        .foregroundStyle(.gray)
                 }
             }
-            
-            Spacer()
-            
-            Button(action: onDelete) {
-                Image(systemName: "trash")
-                    .foregroundStyle(.red.opacity(0.7))
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            Button(action: onEdit) {
+                Image(systemName: "pencil")
+                    .foregroundStyle(Color.wickedGreen)
+                    .frame(width: 36, height: 42)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .accessibilityLabel(Text("Edit shopping item"))
+
+            Button(role: .destructive) {
+                showingDeleteConfirmation = true
+            } label: {
+                Image(systemName: "trash")
+                    .foregroundStyle(.red.opacity(0.8))
+                    .frame(width: 36, height: 42)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(Text("Remove shopping item"))
         }
-        .padding()
-        .background(.ultraThinMaterial)
-        .cornerRadius(15)
-        .overlay(
-            RoundedRectangle(cornerRadius: 15)
-                .stroke(Color.white.opacity(0.2), lineWidth: 1)
-        )
+        .padding(.horizontal, 12)
+        .padding(.vertical, 9)
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 15, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 15, style: .continuous)
+                .stroke(Color.white.opacity(0.12), lineWidth: 1)
+        }
+        .alert(AppLocalization.key("Remove this item?"), isPresented: $showingDeleteConfirmation) {
+            Button(AppLocalization.key("Remove"), role: .destructive, action: onDelete)
+            Button(AppLocalization.key("Cancel"), role: .cancel) { }
+        } message: {
+            Text(AppLocalization.key(item.isManuallyAdded
+                                     ? "This removes the custom product from your list."
+                                     : "This hides the generated ingredient and keeps it removed when you refresh this period."))
+        }
     }
 }
 
-struct ManualAddItemSheet: View {
-    @Environment(\.dismiss) var dismiss
-    var onSave: (String) -> Void
-    
-    @State private var newItemName: String = ""
-    @FocusState private var isFocused: Bool
-    
+struct ShoppingListItemEditorSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    let item: ShoppingListItem?
+    let onSave: (ShoppingListItem) -> Void
+
+    @State private var name: String
+    @State private var quantityText: String
+    @State private var unit: String
+    @State private var validationError: LocalizedStringKey?
+
+    init(item: ShoppingListItem?, onSave: @escaping (ShoppingListItem) -> Void) {
+        self.item = item
+        self.onSave = onSave
+        _name = State(initialValue: item?.name ?? "")
+        _quantityText = State(initialValue: item.flatMap { $0.quantity > 0 ? String($0.quantity) : nil } ?? "")
+        _unit = State(initialValue: item?.unit ?? "")
+    }
+
     var body: some View {
-        ZStack {
-            Color.darkBackground.ignoresSafeArea()
-            
-            VStack(spacing: 20) {
-                Text("Add manual item")
-                    .font(.headline)
-                    .foregroundStyle(.white)
-                
-                TextField("e.g., Paper towels", text: $newItemName)
-                    .focused($isFocused)
-                    .padding()
-                    .background(Color.black.opacity(0.3))
-                    .cornerRadius(10)
-                    .foregroundStyle(.white)
-                
-                Button("Add to list") {
-                    onSave(newItemName)
-                    dismiss()
+        NavigationStack {
+            ZStack {
+                Color.darkBackground.ignoresSafeArea()
+                Form {
+                    Section("Product") {
+                        TextField("Product name", text: $name)
+                            .accessibilityIdentifier("shoppingList.itemName")
+                        TextField("Quantity (optional)", text: $quantityText)
+                            .keyboardType(.decimalPad)
+                            .accessibilityIdentifier("shoppingList.itemQuantity")
+                        TextField("Unit (optional)", text: $unit)
+                            .accessibilityIdentifier("shoppingList.itemUnit")
+                    }
+                    Section {
+                        Text("Edits to recipe ingredients are kept when you refresh the same planning period.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
                 }
-                .buttonStyle(.borderedProminent)
-                .tint(.glindaPink)
-                .frame(maxWidth: .infinity)
-                .disabled(newItemName.isEmpty)
+                .scrollContentBackground(.hidden)
             }
-            .padding()
+            .navigationTitle(item == nil ? "Add product" : "Edit product")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Save") { save() }
+                        .disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                }
+            }
+            .alert(AppLocalization.key("Check the shopping item"), isPresented: Binding(
+                get: { validationError != nil },
+                set: { if !$0 { validationError = nil } }
+            )) {
+                Button(AppLocalization.key("OK"), role: .cancel) { validationError = nil }
+            } message: {
+                Text(validationError ?? "")
+            }
         }
-        .onAppear {
-            isFocused = true
+        .presentationDetents([.medium, .large])
+    }
+
+    private func save() {
+        let trimmedName = ShoppingListGenerator.cleanedName(name)
+        let trimmedQuantity = quantityText.trimmingCharacters(in: .whitespacesAndNewlines)
+        let quantity: Double
+        if trimmedQuantity.isEmpty {
+            quantity = 0
+        } else {
+            let normalized = trimmedQuantity.replacingOccurrences(of: ",", with: ".")
+            guard let parsed = Double(normalized), parsed.isFinite, parsed >= 0 else {
+                validationError = AppLocalization.key("Enter a valid non-negative quantity.")
+                return
+            }
+            quantity = parsed
         }
+
+        var saved = item ?? ShoppingListItem(
+            name: trimmedName,
+            quantity: 0,
+            unit: "",
+            isManuallyAdded: true
+        )
+        saved.name = trimmedName
+        saved.quantity = quantity
+        saved.unit = unit.trimmingCharacters(in: .whitespacesAndNewlines)
+        onSave(saved)
+        dismiss()
+    }
+}
+
+extension UIApplication {
+    func endEditing() {
+        sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
     }
 }
