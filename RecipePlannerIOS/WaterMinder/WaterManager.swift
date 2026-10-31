@@ -204,12 +204,14 @@ class WaterManager {
             appendLocally(newEntry, documentID: dateKey)
         }
 
-        documentRef.setData(update, merge: true) { [weak self] error in
-            guard let error else { return }
+        do {
+            try await documentRef.setData(update, merge: true)
+        } catch {
             print("Error saving water entry: \(error.localizedDescription)")
-            DispatchQueue.main.async {
-                self?.removePendingEntry(id: newEntry.id)
+            await MainActor.run {
+                removePendingEntry(id: newEntry.id)
             }
+            throw error
         }
     }
 
@@ -373,13 +375,9 @@ class WaterManager {
             guard !entriesToRemove.isEmpty else { continue }
 
             let encodedEntries = try entriesToRemove.map { try Firestore.Encoder().encode($0) }
-            document.reference.updateData([
+            try await document.reference.updateData([
                 "entries": FieldValue.arrayRemove(encodedEntries)
-            ]) { error in
-                if let error {
-                    print("Error clearing daily water entries: \(error.localizedDescription)")
-                }
-            }
+            ])
         }
 
         if !foundTodayDocument {

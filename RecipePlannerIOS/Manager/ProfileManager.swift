@@ -5,7 +5,7 @@
 //  Created by Dominika Sieńko on 15/11/2025.
 //
 
-import Foundation
+@preconcurrency import Foundation
 import Observation
 import FirebaseAuth
 import FirebaseFirestore
@@ -28,6 +28,21 @@ private final class ProfileWriteContinuation: @unchecked Sendable {
         self.continuation = nil
         lock.unlock()
         continuation?.resume(with: result)
+    }
+}
+
+private func profileWriteTimeout(for result: ProfileWriteContinuation) -> Task<Void, Never> {
+    Task {
+        do {
+            try await Task.sleep(for: .seconds(30))
+        } catch is CancellationError {
+            return
+        } catch {
+            result.complete(.failure(error))
+            return
+        }
+
+        result.complete(.failure(ProfileWriteError.timedOut))
     }
 }
 
@@ -165,10 +180,7 @@ class ProfileManager {
     private func writeProfile(_ profile: UserProfile, to document: DocumentReference) async throws {
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
             let result = ProfileWriteContinuation(continuation)
-            let timeout = DispatchWorkItem {
-                result.complete(.failure(ProfileWriteError.timedOut))
-            }
-            DispatchQueue.global().asyncAfter(deadline: .now() + 30, execute: timeout)
+            let timeout = profileWriteTimeout(for: result)
 
             do {
                 try document.setData(from: profile) { error in
@@ -192,10 +204,7 @@ class ProfileManager {
 
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
             let result = ProfileWriteContinuation(continuation)
-            let timeout = DispatchWorkItem {
-                result.complete(.failure(ProfileWriteError.timedOut))
-            }
-            DispatchQueue.global().asyncAfter(deadline: .now() + 30, execute: timeout)
+            let timeout = profileWriteTimeout(for: result)
 
             document.updateData(fields) { error in
                 timeout.cancel()
